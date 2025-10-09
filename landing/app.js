@@ -10,9 +10,14 @@ let currentUser = null;
 let authToken = null;
 
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Audio Hub Landing Page Loading...');
+    console.log('🔗 AUTH_API_BASE:', AUTH_API_BASE);
+    
     // Initialize the application
     initializeApp();
     checkAuthStatus();
+    
+    console.log('✅ App initialization complete');
 });
 
 function initializeApp() {
@@ -37,6 +42,7 @@ function initializeModal() {
 
     // Open modal functions
     function openModal(showSignup = false) {
+        console.log('📱 Opening modal, showSignup:', showSignup);
         loginModal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
         
@@ -71,8 +77,14 @@ function initializeModal() {
     }
 
     // Event listeners
-    loginBtn.addEventListener('click', () => openModal(false));
-    signupBtn.addEventListener('click', () => openModal(true));
+    loginBtn.addEventListener('click', () => {
+        console.log('🔐 Login button clicked');
+        openModal(false);
+    });
+    signupBtn.addEventListener('click', () => {
+        console.log('📝 Signup button clicked');
+        openModal(true);
+    });
     closeModal.addEventListener('click', closeModalHandler);
     modalBackdrop.addEventListener('click', closeModalHandler);
     switchToSignup.addEventListener('click', (e) => {
