@@ -319,7 +319,7 @@ function launchApp(appName) {
     // Launch the appropriate app
     switch (appName) {
         case 'audiocleaner':
-            window.open('https://audiocleaner.site', '_blank');
+            window.open('https://carlosmestre1997.github.io/audioprohub/audiocleaner-pro/', '_blank');
             break;
         case 'samplx':
             window.open('https://carlosmestre1997.github.io/audioprohub/samplx/', '_blank');
