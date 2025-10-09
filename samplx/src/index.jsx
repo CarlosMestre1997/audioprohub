@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Upload, Download, Scissors, Trash2, Mic, MicOff, Undo2 } from 'lucide-react';
+import { Play, Square, Upload, Download, Scissors, Trash2, Mic, MicOff, Undo2, Home } from 'lucide-react';
 
 const SamplX = () => {
   const [audioBuffer, setAudioBuffer] = useState(null);
@@ -12,6 +12,10 @@ const SamplX = () => {
   const [pendingSliceStart, setPendingSliceStart] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [downloadCount, setDownloadCount] = useState(0);
+  const [downloadsRemaining, setDownloadsRemaining] = useState(3);
+  const [isPremium, setIsPremium] = useState(false);
+  const [userEmail, setUserEmail] = useState(null);
   
   const audioContextRef = useRef(null);
   const sourceNodesRef = useRef([]);
@@ -29,12 +33,34 @@ const SamplX = () => {
     audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
     audioContextRef.current.resume();
     
+    // Check for auth token and premium status
+    checkAuthStatus();
+    
+    // Load download count from localStorage
+    const savedCount = localStorage.getItem('samplx_downloads');
+    if (savedCount) {
+      setDownloadCount(parseInt(savedCount));
+      setDownloadsRemaining(Math.max(0, 3 - parseInt(savedCount)));
+    }
+    
     return () => {
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
     };
   }, []);
+
+  const checkAuthStatus = () => {
+    const token = localStorage.getItem('audioHub_token');
+    const email = localStorage.getItem('audioHub_userEmail');
+    
+    if (email) {
+      setUserEmail(email);
+      // Check if user is premium (this would normally come from your auth API)
+      // For now, we'll assume free users
+      setIsPremium(false);
+    }
+  };
 
   useEffect(() => {
     if (audioBuffer) {
@@ -99,136 +125,124 @@ const SamplX = () => {
       setSlices(prevEntry.slices);
       setSliceSettings(prevEntry.settings);
       setHistoryIndex(historyIndex - 1);
-      stopAllAudio();
     }
   };
 
   const loadAudioFile = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-    setAudioBuffer(buffer);
-    
-    audioBuffersRef.current = {};
-    
-    setSlices([]);
-    setSliceSettings({});
-    setPendingSliceStart(null);
-    setZoomLevel(1);
-    setZoomOffset(0);
-    setHistory([]);
-    setHistoryIndex(-1);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer);
+      setAudioBuffer(decoded);
+      setSlices([]);
+      setSliceSettings({});
+      setPendingSliceStart(null);
+      setHistory([]);
+      setHistoryIndex(-1);
+      audioBuffersRef.current = {};
+    } catch (error) {
+      console.error('Error loading audio:', error);
+      alert('Failed to load audio file');
+    }
   };
 
   const drawWaveform = (buffer) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvasRef.current || !buffer) return;
 
+    const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
     const height = canvas.height;
-    const data = buffer.getChannelData(0);
-    
-    const totalDuration = buffer.duration;
-    const visibleDuration = totalDuration / zoomLevel;
-    const startTime = Math.min(zoomOffset, totalDuration - visibleDuration);
-    const endTime = Math.min(startTime + visibleDuration, totalDuration);
-    
-    const startSample = Math.floor((startTime / totalDuration) * data.length);
-    const endSample = Math.floor((endTime / totalDuration) * data.length);
-    const visibleData = data.slice(startSample, endSample);
-    
-    const step = Math.ceil(visibleData.length / width);
-    const amp = height / 2;
 
-    ctx.fillStyle = '#1a1a1a';
+    ctx.fillStyle = '#09090b';
     ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = '#00ff88';
-    ctx.lineWidth = 1;
+
+    const data = buffer.getChannelData(0);
+    const visibleDuration = buffer.duration / zoomLevel;
+    const startTime = Math.min(zoomOffset, buffer.duration - visibleDuration);
+    const endTime = startTime + visibleDuration;
+    
+    const startSample = Math.floor(startTime * buffer.sampleRate);
+    const endSample = Math.floor(endTime * buffer.sampleRate);
+    const step = Math.ceil((endSample - startSample) / width);
+
+    ctx.strokeStyle = '#00b4d8';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
 
     for (let i = 0; i < width; i++) {
+      const sampleIndex = startSample + i * step;
       let min = 1.0;
       let max = -1.0;
+
       for (let j = 0; j < step; j++) {
-        const datum = visibleData[(i * step) + j];
-        if (datum !== undefined) {
-          if (datum < min) min = datum;
-          if (datum > max) max = datum;
-        }
+        const sample = data[Math.min(sampleIndex + j, data.length - 1)];
+        if (sample < min) min = sample;
+        if (sample > max) max = sample;
       }
-      ctx.moveTo(i, (1 + min) * amp);
-      ctx.lineTo(i, (1 + max) * amp);
+
+      const yMin = ((1 + min) / 2) * height;
+      const yMax = ((1 + max) / 2) * height;
+
+      if (i === 0) {
+        ctx.moveTo(i, yMin);
+      } else {
+        ctx.lineTo(i, yMin);
+      }
+      ctx.lineTo(i, yMax);
     }
+
     ctx.stroke();
 
-    if (pendingSliceStart !== null) {
-      const x = ((pendingSliceStart - startTime) / visibleDuration) * canvas.width;
-      if (x >= 0 && x <= width) {
-        ctx.strokeStyle = '#ffff00';
+    // Draw slices
+    slices.forEach((slice, idx) => {
+      const sliceStartX = ((slice.start - startTime) / visibleDuration) * width;
+      const sliceEndX = ((slice.end - startTime) / visibleDuration) * width;
+
+      if (sliceEndX >= 0 && sliceStartX <= width) {
+        const isActive = idx === activeSlice;
+        ctx.fillStyle = isActive ? 'rgba(0, 230, 118, 0.2)' : 'rgba(0, 180, 216, 0.15)';
+        ctx.fillRect(
+          Math.max(0, sliceStartX),
+          0,
+          Math.min(width, sliceEndX) - Math.max(0, sliceStartX),
+          height
+        );
+
+        ctx.strokeStyle = isActive ? '#00e676' : '#00b4d8';
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
+        ctx.moveTo(sliceStartX, 0);
+        ctx.lineTo(sliceStartX, height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(sliceEndX, 0);
+        ctx.lineTo(sliceEndX, height);
         ctx.stroke();
         ctx.setLineDash([]);
-        
-        ctx.fillStyle = '#ffff00';
-        ctx.font = 'bold 12px monospace';
-        ctx.fillText('Start: ' + pendingSliceStart.toFixed(3) + 's', x + 4, 16);
+
+        ctx.fillStyle = isActive ? '#00e676' : '#00b4d8';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText(`${idx + 1}`, sliceStartX + 5, 20);
       }
-    }
-
-    slices.forEach((slice, idx) => {
-      drawSliceMarker(slice, idx, startTime, endTime, visibleDuration);
     });
-  };
 
-  const drawSliceMarker = (slice, idx, startTime, endTime, visibleDuration) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    const sliceStartX = ((slice.start - startTime) / visibleDuration) * canvas.width;
-    const sliceEndX = ((slice.end - startTime) / visibleDuration) * canvas.width;
-    
-    const isActive = idx === activeSlice;
-    const color = isActive ? '#ff0088' : '#00ccff';
-    
-    if (sliceStartX < canvas.width && sliceEndX > 0) {
-      ctx.fillStyle = color + '20';
-      ctx.fillRect(
-        Math.max(0, sliceStartX), 
-        0, 
-        Math.min(canvas.width, sliceEndX) - Math.max(0, sliceStartX), 
-        canvas.height
-      );
-    }
-    
-    if (sliceStartX >= 0 && sliceStartX <= canvas.width) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(sliceStartX, 0);
-      ctx.lineTo(sliceStartX, canvas.height);
-      ctx.stroke();
-
-      ctx.fillStyle = color;
-      ctx.font = 'bold 12px monospace';
-      ctx.fillText(((idx + 1) % 10).toString(), sliceStartX + 4, 16);
-    }
-    
-    if (sliceEndX >= 0 && sliceEndX <= canvas.width) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      ctx.moveTo(sliceEndX, 0);
-      ctx.lineTo(sliceEndX, canvas.height);
-      ctx.stroke();
-      ctx.setLineDash([]);
+    // Draw pending slice start
+    if (pendingSliceStart !== null) {
+      const pendingX = ((pendingSliceStart - startTime) / visibleDuration) * width;
+      if (pendingX >= 0 && pendingX <= width) {
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 5]);
+        ctx.beginPath();
+        ctx.moveTo(pendingX, 0);
+        ctx.lineTo(pendingX, height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
   };
 
@@ -237,143 +251,143 @@ const SamplX = () => {
 
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    
-    // Get more precise mouse position accounting for device pixel ratio
     const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
-    
+
     const visibleDuration = audioBuffer.duration / zoomLevel;
     const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
     const clickTime = startTime + (x / canvas.width) * visibleDuration;
 
     if (pendingSliceStart === null) {
-      if (slices.length >= 10) {
-        alert('Maximum 10 slices reached');
-        return;
-      }
       setPendingSliceStart(clickTime);
     } else {
-      const sliceStart = Math.min(pendingSliceStart, clickTime);
-      const sliceEnd = Math.max(pendingSliceStart, clickTime);
-      
-      if (sliceEnd - sliceStart < 0.01) {
-        alert('Slice too short (minimum 0.01s)');
+      if (clickTime > pendingSliceStart) {
+        const newSlice = {
+          start: pendingSliceStart,
+          end: clickTime
+        };
+        const newSlices = [...slices, newSlice];
+        const newSettings = { ...sliceSettings };
+        setSlices(newSlices);
+        saveToHistory(newSlices, newSettings);
         setPendingSliceStart(null);
-        return;
+      } else {
+        alert('End time must be after start time');
+      }
+    }
+  };
+
+  const playSlice = async (idx) => {
+    const slice = slices[idx];
+    const settings = sliceSettings[idx] || {};
+
+    if (!audioBuffersRef.current[idx]) {
+      const duration = slice.end - slice.start;
+      const sampleRate = audioBuffer.sampleRate;
+      const numberOfChannels = audioBuffer.numberOfChannels;
+      const startOffset = Math.floor(slice.start * sampleRate);
+      const length = Math.floor(duration * sampleRate);
+
+      const sliceBuffer = audioContextRef.current.createBuffer(
+        numberOfChannels,
+        length,
+        sampleRate
+      );
+
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sourceData = audioBuffer.getChannelData(channel);
+        const sliceData = sliceBuffer.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+          sliceData[i] = sourceData[startOffset + i] || 0;
+        }
       }
 
-      const newSlice = { start: sliceStart, end: sliceEnd };
-      const newSlices = [...slices, newSlice].sort((a, b) => a.start - b.start);
-      
-      const sliceIdx = newSlices.indexOf(newSlice);
-      const newSettings = {};
-      newSlices.forEach((s, i) => {
-        if (i === sliceIdx) {
-          newSettings[i] = {
-            transpose: 0,
-            tempo: 1,
-            reverb: 0,
-            flanger: 0,
-            filter: 10000,
-            filterType: 'lowpass'
-          };
-        } else {
-          const oldIdx = i < sliceIdx ? i : i - 1;
-          if (sliceSettings[oldIdx]) {
-            newSettings[i] = sliceSettings[oldIdx];
-          } else {
-            newSettings[i] = {
-              transpose: 0,
-              tempo: 1,
-              reverb: 0,
-              flanger: 0,
-              filter: 10000,
-              filterType: 'lowpass'
-            };
-          }
-        }
-      });
-      
-      // Save to history before updating state
-      saveToHistory(slices, sliceSettings);
-      
-      setSlices(newSlices);
-      setSliceSettings(newSettings);
-      setPendingSliceStart(null);
+      audioBuffersRef.current[idx] = sliceBuffer;
     }
+
+    stopAllAudio();
+
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = audioBuffersRef.current[idx];
+
+    const gainNode = audioContextRef.current.createGain();
+    const filterNode = audioContextRef.current.createBiquadFilter();
+    filterNode.type = 'lowpass';
+    filterNode.frequency.value = settings.filter || 10000;
+
+    source.playbackRate.value = (settings.tempo || 1) * Math.pow(2, (settings.transpose || 0) / 12);
+
+    let chain = source;
+
+    chain.connect(filterNode);
+    chain = filterNode;
+
+    if (settings.flanger && settings.flanger > 0) {
+      const delay = audioContextRef.current.createDelay(0.1);
+      const lfo = audioContextRef.current.createOscillator();
+      const lfoGain = audioContextRef.current.createGain();
+
+      lfo.frequency.value = 0.5;
+      lfoGain.gain.value = 0.005 * settings.flanger;
+
+      lfo.connect(lfoGain);
+      lfoGain.connect(delay.delayTime);
+
+      chain.connect(delay);
+      delay.connect(gainNode);
+      chain = gainNode;
+
+      lfo.start();
+      flangerNodesRef.current[idx] = { lfo, delay };
+    } else {
+      chain.connect(gainNode);
+      chain = gainNode;
+    }
+
+    if (settings.reverb && settings.reverb > 0) {
+      const convolver = audioContextRef.current.createConvolver();
+      const reverbBuffer = createReverbBuffer(2, audioContextRef.current.sampleRate);
+      convolver.buffer = reverbBuffer;
+
+      const dryGain = audioContextRef.current.createGain();
+      const wetGain = audioContextRef.current.createGain();
+
+      dryGain.gain.value = 1 - settings.reverb;
+      wetGain.gain.value = settings.reverb;
+
+      chain.connect(dryGain);
+      chain.connect(convolver);
+      convolver.connect(wetGain);
+
+      const merger = audioContextRef.current.createChannelMerger(2);
+      dryGain.connect(merger);
+      wetGain.connect(merger);
+      merger.connect(audioContextRef.current.destination);
+    } else {
+      chain.connect(audioContextRef.current.destination);
+    }
+
+    source.start();
+    source.onended = () => {
+      setActiveSlice(null);
+    };
+
+    setActiveSlice(idx);
+    sourceNodesRef.current.push(source);
   };
 
-  const deleteSlice = (idx) => {
-    // Save to history before deletion
-    saveToHistory(slices, sliceSettings);
-    
-    const newSlices = slices.filter((_, i) => i !== idx);
-    
-    const newSettings = {};
-    newSlices.forEach((slice, i) => {
-      const oldIdx = i < idx ? i : i + 1;
-      if (sliceSettings[oldIdx]) {
-        newSettings[i] = sliceSettings[oldIdx];
+  const createReverbBuffer = (duration, sampleRate) => {
+    const length = sampleRate * duration;
+    const buffer = audioContextRef.current.createBuffer(2, length, sampleRate);
+
+    for (let channel = 0; channel < 2; channel++) {
+      const data = buffer.getChannelData(channel);
+      for (let i = 0; i < length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
       }
-    });
-    
-    setSlices(newSlices);
-    setSliceSettings(newSettings);
-    
-    if (activeSlice === idx) {
-      stopAllAudio();
     }
-  };
 
-  // Recording functionality
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      recordedChunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
-      };
-      
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(recordedChunksRef.current, { type: 'audio/wav' });
-        const arrayBuffer = await audioBlob.arrayBuffer();
-        const buffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-        
-        setAudioBuffer(buffer);
-        audioBuffersRef.current = {};
-        setSlices([]);
-        setSliceSettings({});
-        setPendingSliceStart(null);
-        setZoomLevel(1);
-        setZoomOffset(0);
-        setHistory([]);
-        setHistoryIndex(-1);
-        
-        // Stop all tracks
-        streamRef.current.getTracks().forEach(track => track.stop());
-      };
-      
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      alert('Could not access microphone. Please check permissions.');
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
+    return buffer;
   };
 
   const stopAllAudio = () => {
@@ -381,259 +395,123 @@ const SamplX = () => {
       try {
         source.stop();
       } catch (e) {
-        // ignore
+        // Already stopped
       }
     });
     sourceNodesRef.current = [];
+
+    Object.values(flangerNodesRef.current).forEach(({ lfo }) => {
+      try {
+        lfo.stop();
+      } catch (e) {
+        // Already stopped
+      }
+    });
+    flangerNodesRef.current = {};
+
     setActiveSlice(null);
   };
 
-  const playSlice = async (idx) => {
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume();
-    }
-    
-    stopAllAudio();
-    
-    const slice = slices[idx];
-    const settings = sliceSettings[idx] || { 
-      transpose: 0, 
-      tempo: 1, 
-      reverb: 0, 
-      flanger: 0, 
-      filter: 10000, 
-      filterType: 'lowpass'
-    };
-    
-    const source = audioContextRef.current.createBufferSource();
-    source.buffer = audioBuffer;
-    
-    const playbackRate = Math.pow(2, settings.transpose / 12) * settings.tempo;
-    source.playbackRate.value = playbackRate;
+  const deleteSlice = (idx) => {
+    const newSlices = slices.filter((_, i) => i !== idx);
+    const newSettings = { ...sliceSettings };
+    delete newSettings[idx];
 
-    let currentNode = source;
+    // Reindex settings
+    const reindexedSettings = {};
+    Object.keys(newSettings).forEach(key => {
+      const oldIdx = parseInt(key);
+      const newIdx = oldIdx > idx ? oldIdx - 1 : oldIdx;
+      reindexedSettings[newIdx] = newSettings[key];
+    });
 
-    const hasFilter = settings.filter < 10000;
-    const hasFlanger = settings.flanger > 0;
-    const hasReverb = settings.reverb > 0;
+    setSlices(newSlices);
+    setSliceSettings(reindexedSettings);
+    saveToHistory(newSlices, reindexedSettings);
 
-    if (hasFilter) {
-      const filter = audioContextRef.current.createBiquadFilter();
-      filter.type = settings.filterType;
-      filter.frequency.value = settings.filter;
-      currentNode.connect(filter);
-      currentNode = filter;
-    }
-
-    if (hasFlanger) {
-      const delay = audioContextRef.current.createDelay();
-      const lfo = audioContextRef.current.createOscillator();
-      const lfoGain = audioContextRef.current.createGain();
-      const feedback = audioContextRef.current.createGain();
-      const mix = audioContextRef.current.createGain();
-      
-      const rate = 0.5 + settings.flanger * 2;
-      const depth = 0.002 + settings.flanger * 0.003;
-      
-      lfo.frequency.value = rate;
-      lfoGain.gain.value = depth;
-      feedback.gain.value = 0.5 + settings.flanger * 0.3;
-      mix.gain.value = settings.flanger;
-      
-      delay.delayTime.value = 0.003;
-      
-      lfo.connect(lfoGain);
-      lfoGain.connect(delay.delayTime);
-      
-      currentNode.connect(delay);
-      delay.connect(feedback);
-      feedback.connect(delay);
-      delay.connect(mix);
-      
-      currentNode.connect(audioContextRef.current.destination);
-      mix.connect(audioContextRef.current.destination);
-      
-      lfo.start();
-      
-      flangerNodesRef.current[idx] = { lfo: lfo, delay: delay, feedback: feedback, mix: mix };
-    }
-
-    if (hasReverb) {
-      const convolver = audioContextRef.current.createConvolver();
-      convolver.buffer = createReverbBuffer(settings.reverb);
-      const dry = audioContextRef.current.createGain();
-      const wet = audioContextRef.current.createGain();
-      dry.gain.value = 1 - settings.reverb;
-      wet.gain.value = settings.reverb;
-      
-      currentNode.connect(dry);
-      currentNode.connect(convolver);
-      convolver.connect(wet);
-      dry.connect(audioContextRef.current.destination);
-      wet.connect(audioContextRef.current.destination);
-    } else if (!hasFlanger) {
-      currentNode.connect(audioContextRef.current.destination);
-    }
-
-    sourceNodesRef.current.push(source);
-    setActiveSlice(idx);
-
-    const now = audioContextRef.current.currentTime;
-    source.start(now, slice.start, slice.end - slice.start);
-    
-    source.onended = () => {
-      setActiveSlice(null);
-      sourceNodesRef.current = sourceNodesRef.current.filter(s => s !== source);
-      
-      if (flangerNodesRef.current[idx]) {
-        flangerNodesRef.current[idx].lfo.stop();
-        delete flangerNodesRef.current[idx];
-      }
-    };
-  };
-
-  const createReverbBuffer = (intensity) => {
-    const rate = audioContextRef.current.sampleRate;
-    const length = rate * (1 + intensity * 2);
-    const impulse = audioContextRef.current.createBuffer(2, length, rate);
-    
-    for (let channel = 0; channel < 2; channel++) {
-      const data = impulse.getChannelData(channel);
-      for (let i = 0; i < length; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
-      }
-    }
-    return impulse;
+    delete audioBuffersRef.current[idx];
   };
 
   const exportAllSlices = async () => {
-    if (!audioBuffer || slices.length === 0) return;
-
-    const sampleRate = audioBuffer.sampleRate;
-    const gapSamples = Math.floor(sampleRate * 0.5); // 0.5 second gap between slices
-    let totalLength = slices.reduce((sum, slice, idx) => {
-      const settings = sliceSettings[idx] || { tempo: 1 };
-      const sliceLength = Math.floor((slice.end - slice.start) * sampleRate / settings.tempo);
-      return sum + sliceLength + gapSamples;
-    }, 0);
-
-    const channels = audioBuffer.numberOfChannels;
-    const exportBuffer = audioContextRef.current.createBuffer(channels, totalLength, sampleRate);
-
-    let offset = 0;
-    for (let sliceIdx = 0; sliceIdx < slices.length; sliceIdx++) {
-      const slice = slices[sliceIdx];
-      const settings = sliceSettings[sliceIdx] || { 
-        transpose: 0, 
-        tempo: 1, 
-        reverb: 0, 
-        flanger: 0, 
-        filter: 10000, 
-        filterType: 'lowpass' 
-      };
-
-      // Create a temporary buffer for this slice with effects
-      const sliceStartSample = Math.floor(slice.start * sampleRate);
-      const sliceEndSample = Math.floor(slice.end * sampleRate);
-      const originalSliceLength = sliceEndSample - sliceStartSample;
-      const processedSliceLength = Math.floor(originalSliceLength / settings.tempo);
-      
-      // Create source buffer for this slice
-      const sliceBuffer = audioContextRef.current.createBuffer(channels, originalSliceLength, sampleRate);
-      for (let ch = 0; ch < channels; ch++) {
-        const sourceData = audioBuffer.getChannelData(ch);
-        const sliceData = sliceBuffer.getChannelData(ch);
-        for (let i = 0; i < originalSliceLength; i++) {
-          sliceData[i] = sourceData[sliceStartSample + i];
-        }
-      }
-
-      // Process the slice with effects
-      const processedBuffer = await processSliceWithEffects(sliceBuffer, settings, processedSliceLength);
-
-      // Copy processed slice to export buffer
-      for (let ch = 0; ch < channels; ch++) {
-        const processedData = processedBuffer.getChannelData(ch);
-        const destData = exportBuffer.getChannelData(ch);
-        for (let i = 0; i < processedSliceLength; i++) {
-          destData[offset + i] = processedData[i];
-        }
-      }
-      offset += processedSliceLength + gapSamples;
+    // Check download limit for free users
+    if (!isPremium && downloadCount >= 3) {
+      showUpgradeModal();
+      return;
     }
 
-    const wav = bufferToWave(exportBuffer);
-    const blob = new Blob([wav], { type: 'audio/wav' });
-    const url = URL.createObjectURL(blob);
+    if (slices.length === 0) return;
+
+    for (let i = 0; i < slices.length; i++) {
+      await exportSlice(i);
+    }
+
+    // Increment download count for free users
+    if (!isPremium) {
+      const newCount = downloadCount + 1;
+      setDownloadCount(newCount);
+      setDownloadsRemaining(Math.max(0, 3 - newCount));
+      localStorage.setItem('samplx_downloads', newCount.toString());
+    }
+  };
+
+  const exportSlice = async (idx) => {
+    const slice = slices[idx];
+    const settings = sliceSettings[idx] || {};
+
+    const duration = slice.end - slice.start;
+    const sampleRate = audioBuffer.sampleRate;
+    const numberOfChannels = audioBuffer.numberOfChannels;
+
+    const offlineContext = new OfflineAudioContext(
+      numberOfChannels,
+      duration * sampleRate,
+      sampleRate
+    );
+
+    const source = offlineContext.createBufferSource();
+    const startOffset = Math.floor(slice.start * sampleRate);
+    const length = Math.floor(duration * sampleRate);
+
+    const sliceBuffer = offlineContext.createBuffer(
+      numberOfChannels,
+      length,
+      sampleRate
+    );
+
+    for (let channel = 0; channel < numberOfChannels; channel++) {
+      const sourceData = audioBuffer.getChannelData(channel);
+      const sliceData = sliceBuffer.getChannelData(channel);
+      for (let i = 0; i < length; i++) {
+        sliceData[i] = sourceData[startOffset + i] || 0;
+      }
+    }
+
+    source.buffer = sliceBuffer;
+    source.playbackRate.value = (settings.tempo || 1) * Math.pow(2, (settings.transpose || 0) / 12);
+
+    const filterNode = offlineContext.createBiquadFilter();
+    filterNode.type = 'lowpass';
+    filterNode.frequency.value = settings.filter || 10000;
+
+    source.connect(filterNode);
+    filterNode.connect(offlineContext.destination);
+
+    source.start();
+
+    const renderedBuffer = await offlineContext.startRendering();
+    const wavBlob = bufferToWav(renderedBuffer);
+    const url = URL.createObjectURL(wavBlob);
+
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'samplx-slices.wav';
+    a.download = `slice_${idx + 1}.wav`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
-  const processSliceWithEffects = async (sliceBuffer, settings, targetLength) => {
-    const sampleRate = sliceBuffer.sampleRate;
-    const channels = sliceBuffer.numberOfChannels;
-    const processedBuffer = audioContextRef.current.createBuffer(channels, targetLength, sampleRate);
-
-    // Create offline context for processing
-    const offlineContext = new OfflineAudioContext(channels, targetLength, sampleRate);
-    
-    // Create source
-    const source = offlineContext.createBufferSource();
-    source.buffer = sliceBuffer;
-    
-    // Apply tempo (pitch and speed change)
-    const transposeFactor = Math.pow(2, settings.transpose / 12);
-    const tempoFactor = settings.tempo;
-    source.playbackRate.value = transposeFactor * tempoFactor;
-
-    let currentNode = source;
-
-    // Apply filter
-    if (settings.filter < 10000) {
-      const filter = offlineContext.createBiquadFilter();
-      filter.type = settings.filterType;
-      filter.frequency.value = settings.filter;
-      currentNode.connect(filter);
-      currentNode = filter;
-    }
-
-    // Apply reverb (simplified)
-    if (settings.reverb > 0) {
-      const convolver = offlineContext.createConvolver();
-      convolver.buffer = createReverbBuffer(settings.reverb);
-      const dry = offlineContext.createGain();
-      const wet = offlineContext.createGain();
-      dry.gain.value = 1 - settings.reverb;
-      wet.gain.value = settings.reverb;
-      
-      currentNode.connect(dry);
-      currentNode.connect(convolver);
-      convolver.connect(wet);
-      dry.connect(offlineContext.destination);
-      wet.connect(offlineContext.destination);
-    } else {
-      currentNode.connect(offlineContext.destination);
-    }
-
-    // Start rendering
-    source.start();
-    const renderedBuffer = await offlineContext.startRendering();
-    
-    // Copy to target buffer
-    for (let ch = 0; ch < channels; ch++) {
-      const renderedData = renderedBuffer.getChannelData(ch);
-      const processedData = processedBuffer.getChannelData(ch);
-      for (let i = 0; i < targetLength; i++) {
-        processedData[i] = renderedData[i] || 0;
-      }
-    }
-
-    return processedBuffer;
-  };
-
-  const bufferToWave = (buffer) => {
+  const bufferToWav = (buffer) => {
     const length = buffer.length * buffer.numberOfChannels * 2 + 44;
     const arrayBuffer = new ArrayBuffer(length);
     const view = new DataView(arrayBuffer);
@@ -679,7 +557,51 @@ const SamplX = () => {
       offset++;
     }
 
-    return arrayBuffer;
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+        const arrayBuffer = await blob.arrayBuffer();
+        const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer);
+        setAudioBuffer(decoded);
+        setSlices([]);
+        setSliceSettings({});
+        audioBuffersRef.current = {};
+
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('Failed to start recording. Please allow microphone access.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
   };
 
   const updateSliceSetting = (idx, key, value) => {
@@ -714,12 +636,53 @@ const SamplX = () => {
     setPendingSliceStart(null);
   };
 
+  const showUpgradeModal = () => {
+    alert('You\'ve reached your free download limit!\n\nUpgrade to Premium for unlimited downloads.\n\nGo back to the Audio Hub to upgrade.');
+  };
+
+  const goBackToHub = () => {
+    window.location.href = window.location.origin + '/audioprohub/';
+  };
+
   return (
-    <div className="min-h-screen bg-zinc-900 text-gray-100 p-6 font-mono">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8 flex items-center justify-between">
-          <h1 className="text-4xl font-bold text-emerald-400">SamplX</h1>
-          <div className="flex gap-2">
+    <div className="min-h-screen bg-zinc-900 text-gray-100">
+      {/* Navigation Bar */}
+      <nav className="fixed top-0 left-0 right-0 bg-black bg-opacity-95 border-b-2 border-teal-500 px-6 py-3 flex justify-between items-center z-50 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={goBackToHub}
+            className="text-teal-400 hover:text-teal-300 transition"
+          >
+            <Home size={24} />
+          </button>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">
+            🎛️ SamplX
+          </h1>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <div className="bg-zinc-800 border border-teal-500 rounded px-4 py-2 text-sm">
+            {isPremium ? (
+              <span className="text-emerald-400">✨ Premium - Unlimited Downloads</span>
+            ) : (
+              <span className="text-teal-400">
+                Downloads: {downloadsRemaining} remaining
+              </span>
+            )}
+          </div>
+          <button 
+            onClick={goBackToHub}
+            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded transition text-sm font-medium"
+          >
+            ← Back to Hub
+          </button>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <div className="pt-20 px-6 pb-6 font-mono">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-6 flex gap-2 flex-wrap">
             <input
               type="file"
               ref={fileInputRef}
@@ -729,7 +692,7 @@ const SamplX = () => {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded flex items-center gap-2 transition"
+              className="px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 rounded flex items-center gap-2 transition shadow-lg"
             >
               <Upload size={16} /> Load Sample
             </button>
@@ -751,7 +714,7 @@ const SamplX = () => {
             <button
               onClick={undo}
               disabled={historyIndex <= 0}
-              className="px-4 py-2 bg-gray-500 hover:bg-gray-600 disabled:bg-gray-700 disabled:cursor-not-allowed rounded flex items-center gap-2 transition"
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-800 disabled:cursor-not-allowed rounded flex items-center gap-2 transition"
               title="Undo last action (Ctrl+Z)"
             >
               <Undo2 size={16} /> Undo
@@ -763,204 +726,203 @@ const SamplX = () => {
               <Square size={16} /> Stop All [Space]
             </button>
           </div>
-        </header>
 
-        <div className="bg-zinc-800 rounded-lg p-4 mb-6">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm text-gray-400 flex items-center gap-2">
-              <Scissors size={16} /> 
-              {pendingSliceStart === null ? (
-                'Click to set slice START'
-              ) : (
-                <span className="text-yellow-400">Click to set slice END (or cancel)</span>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-2">
-              {pendingSliceStart !== null && (
-                <button
-                  onClick={cancelPendingSlice}
-                  className="px-3 py-1 bg-red-500 hover:bg-red-600 rounded text-xs transition"
-                >
-                  Cancel Slice
-                </button>
-              )}
-              
-              <div className="flex items-center gap-1 bg-zinc-900 rounded px-2 py-1">
-                <button
-                  onClick={() => handlePan(-1)}
-                  disabled={zoomLevel === 1}
-                  className="px-2 py-1 hover:bg-zinc-700 rounded disabled:opacity-30 transition text-xs"
-                >
-                  ←
-                </button>
-                <button
-                  onClick={() => handlePan(1)}
-                  disabled={zoomLevel === 1}
-                  className="px-2 py-1 hover:bg-zinc-700 rounded disabled:opacity-30 transition text-xs"
-                >
-                  →
-                </button>
+          <div className="bg-zinc-800 rounded-lg p-4 mb-6 border border-teal-700">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm text-gray-400 flex items-center gap-2">
+                <Scissors size={16} className="text-teal-400" /> 
+                {pendingSliceStart === null ? (
+                  'Click to set slice START'
+                ) : (
+                  <span className="text-yellow-400">Click to set slice END (or cancel)</span>
+                )}
               </div>
               
-              <div className="flex items-center gap-1 bg-zinc-900 rounded px-2 py-1">
-                <button
-                  onClick={() => handleZoom(1)}
-                  className="px-2 py-1 hover:bg-zinc-700 rounded transition text-xs"
-                >
-                  +
-                </button>
-                <span className="text-xs px-2 text-cyan-400">{zoomLevel.toFixed(1)}x</span>
-                <button
-                  onClick={() => handleZoom(-1)}
-                  className="px-2 py-1 hover:bg-zinc-700 rounded transition text-xs"
-                >
-                  −
-                </button>
+              <div className="flex items-center gap-2">
+                {pendingSliceStart !== null && (
+                  <button
+                    onClick={cancelPendingSlice}
+                    className="px-3 py-1 bg-red-500 hover:bg-red-600 rounded text-xs transition"
+                  >
+                    Cancel Slice
+                  </button>
+                )}
+                
+                <div className="flex items-center gap-1 bg-zinc-900 rounded px-2 py-1">
+                  <button
+                    onClick={() => handlePan(-1)}
+                    disabled={zoomLevel === 1}
+                    className="px-2 py-1 hover:bg-zinc-700 rounded disabled:opacity-30 transition text-xs"
+                  >
+                    ←
+                  </button>
+                  <button
+                    onClick={() => handlePan(1)}
+                    disabled={zoomLevel === 1}
+                    className="px-2 py-1 hover:bg-zinc-700 rounded disabled:opacity-30 transition text-xs"
+                  >
+                    →
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-1 bg-zinc-900 rounded px-2 py-1">
+                  <button
+                    onClick={() => handleZoom(1)}
+                    className="px-2 py-1 hover:bg-zinc-700 rounded transition text-xs"
+                  >
+                    +
+                  </button>
+                  <span className="text-xs px-2 text-teal-400">{zoomLevel.toFixed(1)}x</span>
+                  <button
+                    onClick={() => handleZoom(-1)}
+                    className="px-2 py-1 hover:bg-zinc-700 rounded transition text-xs"
+                  >
+                    −
+                  </button>
+                </div>
+                
+                {zoomLevel > 1 && (
+                  <button
+                    onClick={resetZoom}
+                    className="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-xs transition"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
-              
-              {zoomLevel > 1 && (
-                <button
-                  onClick={resetZoom}
-                  className="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-xs transition"
-                >
-                  Reset
-                </button>
-              )}
             </div>
+            <canvas
+              ref={canvasRef}
+              width={1200}
+              height={200}
+              onClick={handleCanvasClick}
+              onMouseMove={(e) => {
+                if (!audioBuffer) return;
+                const canvas = canvasRef.current;
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const x = (e.clientX - rect.left) * scaleX;
+                const visibleDuration = audioBuffer.duration / zoomLevel;
+                const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
+                const hoverTime = startTime + (x / canvas.width) * visibleDuration;
+                
+                if (hoverTime >= 0 && hoverTime <= audioBuffer.duration) {
+                  canvas.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'40\' viewBox=\'0 0 20 40\'><line x1=\'10\' y1=\'0\' x2=\'10\' y2=\'40\' stroke=\'%2300b4d8\' stroke-width=\'2\'/><circle cx=\'10\' cy=\'20\' r=\'3\' fill=\'%2300b4d8\'/></svg>") 10 20, crosshair';
+                }
+              }}
+              className="w-full bg-zinc-950 rounded border border-teal-700"
+            />
           </div>
-          <canvas
-            ref={canvasRef}
-            width={1200}
-            height={200}
-            onClick={handleCanvasClick}
-            onMouseMove={(e) => {
-              if (!audioBuffer) return;
-              const canvas = canvasRef.current;
-              const rect = canvas.getBoundingClientRect();
-              const scaleX = canvas.width / rect.width;
-              const x = (e.clientX - rect.left) * scaleX;
-              const visibleDuration = audioBuffer.duration / zoomLevel;
-              const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
-              const hoverTime = startTime + (x / canvas.width) * visibleDuration;
-              
-              // Update cursor style based on hover position
-              if (hoverTime >= 0 && hoverTime <= audioBuffer.duration) {
-                canvas.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'40\' viewBox=\'0 0 20 40\'><line x1=\'10\' y1=\'0\' x2=\'10\' y2=\'40\' stroke=\'%2300ff88\' stroke-width=\'2\'/><circle cx=\'10\' cy=\'20\' r=\'3\' fill=\'%2300ff88\'/></svg>") 10 20, crosshair';
-              }
-            }}
-            className="w-full bg-zinc-950 rounded border border-zinc-700"
-          />
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {slices.map((slice, idx) => {
-            const settings = sliceSettings[idx] || {};
-            return (
-              <div
-                key={idx}
-                className={'bg-zinc-800 rounded-lg p-4 border-2 transition ' + (activeSlice === idx ? 'border-pink-500' : 'border-transparent')}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-lg font-bold text-cyan-400">
-                    Slice {(idx + 1) % 10} [{(idx + 1) % 10}]
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => playSlice(idx)}
-                      className="p-2 bg-emerald-500 hover:bg-emerald-600 rounded transition"
-                    >
-                      <Play size={16} />
-                    </button>
-                    <button
-                      onClick={() => deleteSlice(idx)}
-                      className="p-2 bg-red-500 hover:bg-red-600 rounded transition"
-                      title="Delete slice"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {slices.map((slice, idx) => {
+              const settings = sliceSettings[idx] || {};
+              return (
+                <div
+                  key={idx}
+                  className={'bg-zinc-800 rounded-lg p-4 border-2 transition ' + (activeSlice === idx ? 'border-teal-500' : 'border-transparent')}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-lg font-bold text-teal-400">
+                      Slice {(idx + 1) % 10} [{(idx + 1) % 10}]
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => playSlice(idx)}
+                        className="p-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 rounded transition"
+                      >
+                        <Play size={16} />
+                      </button>
+                      <button
+                        onClick={() => deleteSlice(idx)}
+                        className="p-2 bg-red-500 hover:bg-red-600 rounded transition"
+                        title="Delete slice"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <label className="text-gray-400">Transpose: {settings.transpose || 0}</label>
+                      <input
+                        type="range"
+                        min="-12"
+                        max="12"
+                        step="1"
+                        value={settings.transpose || 0}
+                        onChange={(e) => updateSliceSetting(idx, 'transpose', parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-gray-400">Tempo: {(settings.tempo || 1).toFixed(2)}x</label>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2"
+                        step="0.1"
+                        value={settings.tempo || 1}
+                        onChange={(e) => updateSliceSetting(idx, 'tempo', parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-gray-400">Filter: {settings.filter || 10000}Hz</label>
+                      <input
+                        type="range"
+                        min="100"
+                        max="10000"
+                        step="100"
+                        value={settings.filter || 10000}
+                        onChange={(e) => updateSliceSetting(idx, 'filter', parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-gray-400">Flanger: {((settings.flanger || 0) * 100).toFixed(0)}%</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={settings.flanger || 0}
+                        onChange={(e) => updateSliceSetting(idx, 'flanger', parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-gray-400">Reverb: {((settings.reverb || 0) * 100).toFixed(0)}%</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={settings.reverb || 0}
+                        onChange={(e) => updateSliceSetting(idx, 'reverb', parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <label className="text-gray-400">Transpose: {settings.transpose || 0}</label>
-                    <input
-                      type="range"
-                      min="-12"
-                      max="12"
-                      step="1"
-                      value={settings.transpose || 0}
-                      onChange={(e) => updateSliceSetting(idx, 'transpose', parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-gray-400">Tempo: {(settings.tempo || 1).toFixed(2)}x</label>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="2"
-                      step="0.1"
-                      value={settings.tempo || 1}
-                      onChange={(e) => updateSliceSetting(idx, 'tempo', parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-gray-400">Filter: {settings.filter || 10000}Hz</label>
-                    <input
-                      type="range"
-                      min="100"
-                      max="10000"
-                      step="100"
-                      value={settings.filter || 10000}
-                      onChange={(e) => updateSliceSetting(idx, 'filter', parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-gray-400">Flanger: {((settings.flanger || 0) * 100).toFixed(0)}%</label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={settings.flanger || 0}
-                      onChange={(e) => updateSliceSetting(idx, 'flanger', parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-gray-400">Reverb: {((settings.reverb || 0) * 100).toFixed(0)}%</label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={settings.reverb || 0}
-                      onChange={(e) => updateSliceSetting(idx, 'reverb', parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="bg-zinc-800 rounded-lg p-4 flex gap-4 justify-center">
-          <button
-            onClick={exportAllSlices}
-            disabled={!audioBuffer || slices.length === 0}
-            className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center gap-2 transition"
-          >
-            <Download size={16} /> Export All Slices (WAV)
-          </button>
+          <div className="bg-zinc-800 rounded-lg p-4 flex gap-4 justify-center border border-teal-700">
+            <button
+              onClick={exportAllSlices}
+              disabled={!audioBuffer || slices.length === 0}
+              className="px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center gap-2 transition shadow-lg"
+            >
+              <Download size={16} /> Export All Slices (WAV)
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -968,4 +930,3 @@ const SamplX = () => {
 };
 
 export default SamplX;
-
