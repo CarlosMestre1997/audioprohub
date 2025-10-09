@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AudioCleaner Pro</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+            color: #00ff88;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 2rem 0;
+            position: relative;
+        }
+        
+        .logo {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 3.5rem;
+            font-weight: 400;
+            text-shadow: 0 0 20px #00ff88, 0 0 40px #00ff88;
+            margin-bottom: 0.5rem;
+            animation: glow 2s ease-in-out infinite alternate;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+        }
+        
+        .subtitle {
+            font-size: 1rem;
+            color: #66ffaa;
+            opacity: 0.8;
+        }
+        
+        @keyframes glow {
+            from { text-shadow: 0 0 20px #00ff88, 0 0 40px #00ff88; }
+            to { text-shadow: 0 0 30px #00ff88, 0 0 60px #00ff88, 0 0 80px #00ff88; }
+        }
+        
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+        
+        .spectrum-container {
+            height: 300px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid #00ff88;
+            border-radius: 0;
+            margin: 2rem 0;
+            display: flex;
+            align-items: end;
+            justify-content: space-around;
+            padding: 10px;
+            overflow: hidden;
+            position: relative;
+            background-image: 
+                linear-gradient(to right, rgba(0, 255, 136, 0.1) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 255, 136, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        .spectrum-bar {
+            width: 12px;
+            background: linear-gradient(to top, #ff0080, #00ff88, #00d4ff);
+            border-radius: 0;
+            margin: 0 1px;
+            transition: height 0.05s ease;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+        
+        .upload-zone {
+            border: 3px dashed #00ff88;
+            border-radius: 0;
+            padding: 3rem;
+            text-align: center;
+            margin: 2rem 0;
+            background: rgba(0, 255, 136, 0.05);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-zone:hover, .upload-zone.dragover {
+            background: rgba(0, 255, 136, 0.15);
+            border-color: #66ffaa;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        .controls-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+        
+        .control-group {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid #00ff88;
+            border-radius: 0;
+            padding: 1.5rem;
+            position: relative;
+        }
+        
+        .control-group h3 {
+            color: #00ff88;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            font-family: 'Share Tech Mono', monospace;
+        }
+        
+        .slider-container {
+            margin: 1rem 0;
+        }
+        
+        .slider {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            appearance: none;
+            outline: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #00ff88;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px #00ff88;
+        }
+        
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #00ff88;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 10px #00ff88;
+        }
+        
+        .process-btn {
+            background: linear-gradient(45deg, #00ff88, #00d4ff);
+            color: #000;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-radius: 0;
+            cursor: pointer;
+            font-family: 'Share Tech Mono', monospace;
+            margin: 2rem auto;
+            display: block;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        .process-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .process-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
+            text-align: center;
+            margin: 1rem 0;
+            font-size: 1.1rem;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Easter Egg Styles */
+        .easter-egg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .easter-message {
+            font-size: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            animation: rainbow 2s linear infinite;
+        }
+        
+        @keyframes rainbow {
+            0% { color: #ff0080; }
+            16% { color: #ff4000; }
+            32% { color: #ff8000; }
+            48% { color: #ffff00; }
+            64% { color: #80ff00; }
+            80% { color: #00ff80; }
+            100% { color: #0080ff; }
+        }
+        
+        .dancing-bars {
+            display: flex;
+            gap: 5px;
+            margin: 2rem 0;
+        }
+        
+        .dancing-bar {
+            width: 10px;
+            height: 50px;
+            background: #00ff88;
+            animation: dance 0.5s ease-in-out infinite alternate;
+        }
+        
+        .dancing-bar:nth-child(2) { animation-delay: 0.1s; }
+        .dancing-bar:nth-child(3) { animation-delay: 0.2s; }
+        .dancing-bar:nth-child(4) { animation-delay: 0.3s; }
+        .dancing-bar:nth-child(5) { animation-delay: 0.4s; }
+        
+        @keyframes dance {
+            from { transform: scaleY(0.5); }
+            to { transform: scaleY(1.5); }
+        }
+        
+        .close-easter {
+            padding: 1rem 2rem;
+            background: transparent;
+            border: 2px solid #00ff88;
+            color: #00ff88;
+            font-family: 'Orbitron', monospace;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 2rem;
+        }
+        
+        .file-info {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid #00ff88;
+            border-radius: 0;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .playback-controls {
+            display: none;
+        }
+        
+        .play-btn {
+            display: none;
+        }
+        
+        .waveform {
+            display: none;
+        }
+        
+        .sample-indicator {
+            display: none;
+        }
+        
+        .preview-label {
+            position: absolute;
+            top: -25px;
+            right: 0;
+            font-size: 0.7rem;
+            color: #66ffaa;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 2px 6px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="logo">AUDIOCLEANER PRO</h1>
+        <p class="subtitle">Professional Real-Time Audio Noise Reduction Suite</p>
+    </div>
+    
+    <div class="main-container">
+        <div class="spectrum-container" id="spectrum">
+            <!-- Spectrum bars will be generated here -->
+            <div class="playback-controls">
+                <button class="play-btn" id="playBtn">▶ Play Preview</button>
+                <div class="waveform">
+                    <div class="waveform-progress" id="waveProgress"></div>
+                </div>
+                <div class="sample-indicator" id="sampleTime">00:00 / 05:00</div>
+            </div>
+        </div>
+        
+        <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon">🎵</div>
+            <h3>Drop your audio file here or click to select</h3>
+            <p>Supports MP3, WAV, OGG, M4A</p>
+            <input type="file" id="audioFile" accept="audio/*" style="display: none;">
+        </div>
+        
+        <div id="fileInfo" class="file-info hidden">
+            <h3>File Loaded:</h3>
+            <p id="fileName"></p>
+            <p id="fileDetails"></p>
+        </div>
+        
+        <div class="controls-panel">
+            <div class="control-group">
+                <h3>Noise Reduction</h3>
+                <div class="preview-label">Live Preview</div>
+                <div class="slider-container">
+                    <label>Intensity: <span id="noiseValue">50</span>%</label>
+                    <input type="range" class="slider" id="noiseReduction" min="0" max="100" value="50">
+                </div>
+                <div class="slider-container">
+                    <label>Frequency Cut: <span id="freqValue">8000</span>Hz</label>
+                    <input type="range" class="slider" id="freqCut" min="1000" max="20000" value="8000">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Enhancement</h3>
+                <div class="preview-label">Live Preview</div>
+                <div class="slider-container">
+                    <label>Clarity Boost: <span id="clarityValue">30</span>%</label>
+                    <input type="range" class="slider" id="clarity" min="0" max="100" value="30">
+                </div>
+                <div class="slider-container">
+                    <label>Vocal Enhance: <span id="vocalValue">25</span>%</label>
+                    <input type="range" class="slider" id="vocal" min="0" max="100" value="25">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Output</h3>
+                <div class="preview-label">Live Preview</div>
+                <div class="slider-container">
+                    <label>Volume: <span id="volumeValue">100</span>%</label>
+                    <input type="range" class="slider" id="volume" min="0" max="200" value="100">
+                </div>
+                <div class="slider-container">
+                    <label>Quality: <span id="qualityValue">High</span></label>
+                    <select id="quality" style="width: 100%; padding: 0.5rem; background: #333; color: #00ff88; border: 1px solid #00ff88;">
+                        <option value="high">High Quality</option>
+                        <option value="medium">Medium Quality</option>
+                        <option value="low">Fast Processing</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <button class="process-btn" id="processBtn" disabled>
+            🎧 CLEAN AUDIO
+        </button>
+        
+        <div class="status" id="status">
+            Upload an audio file to get started
+        </div>
+    </div>
+    
+    <!-- Easter Egg Modal -->
+    <div id="easterEgg" class="easter-egg hidden">
+        <div class="easter-message">
+            🎉 KONAMI CODE ACTIVATED! 🎉<br>
+            <small>"In the world of audio, silence is golden, but clean sound is platinum!" 🎵✨</small>
+        </div>
+        <div class="dancing-bars">
+            <div class="dancing-bar"></div>
+            <div class="dancing-bar"></div>
+            <div class="dancing-bar"></div>
+            <div class="dancing-bar"></div>
+            <div class="dancing-bar"></div>
+        </div>
+        <div style="text-align: center; color: #66ffaa;">
+            <p>🏆 Achievement Unlocked: "Golden Ears" 🏆</p>
+            <p>You've discovered the secret audiophile mode!</p>
+        </div>
+        <button class="close-easter" onclick="closeEasterEgg()">Close</button>
+    </div>
+
+    <script src="https://js.stripe.com/v3/"></script>
+    <!-- Use backend-managed download/subscription handler -->
+    <script src="download-handler.js"></script>
+    <!-- Force GitHub Pages rebuild -->
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.0/lame.min.js"></script>
+
+    <div id="usageStatus" style="
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 255, 136, 0.1);
+    border: 1px solid #00ff88;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    z-index: 1000;
+"></div>
+
+    <script>
+        let audioContext;
+        let audioBuffer;
+        let sourceNode;
+        let gainNode;
+        let analyser;
+        let dataArray;
+        let isProcessing = false;
+        let isPlaying = false;
+        let currentPlaybackSource;
+        let filterNodes = {};
+        let playbackStartTime = 0;
+        let playbackDuration = 5;
+        let animationFrame;
+        
+        const konamiCode = [
+            'ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown',
+            'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight',
+            'KeyB', 'KeyA'
+        ];
+        let konamiIndex = 0;
+        
+        function initSpectrum() {
+            const spectrum = document.getElementById('spectrum');
+            for (let i = 0; i < 60; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'spectrum-bar';
+                bar.style.height = Math.random() * 200 + 30 + 'px';
+                bar.style.animationDelay = (i * 0.05) + 's';
+                spectrum.appendChild(bar);
+            }
+        }
+        
+        function updateSpectrumFromAudio() {
+            if (analyser && dataArray) {
+                analyser.getByteFrequencyData(dataArray);
+                const bars = document.querySelectorAll('.spectrum-bar');
+                const step = Math.floor(dataArray.length / bars.length);
+                
+                bars.forEach((bar, index) => {
+                    const value = dataArray[index * step];
+                    const height = (value / 255) * 280 + 40;
+                    bar.style.height = height + 'px';
+                });
+            }
+            
+            if (isPlaying) {
+                requestAnimationFrame(updateSpectrumFromAudio);
+            }
+        }
+        
+        function animateSpectrum() {
+            if (!isPlaying) {
+                const bars = document.querySelectorAll('.spectrum-bar');
+                bars.forEach(bar => {
+                    const height = Math.random() * 80 + 30;
+                    bar.style.height = height + 'px';
+                });
+            }
+        }
+        
+        // File upload handling
+        function setupFileUpload() {
+            const uploadZone = document.getElementById('uploadZone');
+            const fileInput = document.getElementById('audioFile');
+            
+            uploadZone.addEventListener('click', () => fileInput.click());
+            
+            uploadZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadZone.classList.add('dragover');
+            });
+            
+            uploadZone.addEventListener('dragleave', () => {
+                uploadZone.classList.remove('dragover');
+            });
+            
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFileSelect(files[0]);
+                }
+            });
+            
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFileSelect(e.target.files[0]);
+                }
+            });
+        }
+        
+        // Handle file selection
+        async function handleFileSelect(file) {
+            const status = document.getElementById('status');
+            const processBtn = document.getElementById('processBtn');
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+            const fileDetails = document.getElementById('fileDetails');
+            
+            status.textContent = 'Loading audio file...';
+            processBtn.disabled = true;
+            
+            try {
+                // Initialize audio context if not already done
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                const arrayBuffer = await file.arrayBuffer();
+                audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                // Setup analyzer for spectrum display
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                
+                // Display file info
+                fileName.textContent = file.name;
+                fileDetails.textContent = `Duration: ${audioBuffer.duration.toFixed(2)}s | Channels: ${audioBuffer.numberOfChannels} | Sample Rate: ${audioBuffer.sampleRate}Hz`;
+                fileInfo.classList.remove('hidden');
+                
+                status.textContent = 'Audio file loaded successfully! Ready to process.';
+                processBtn.disabled = false;
+                
+                // Setup audio processing chain
+                setupAudioChain();
+                
+            } catch (error) {
+                status.textContent = 'Error loading audio file. Please try a different file.';
+                console.error('Audio loading error:', error);
+            }
+        }
+        
+        // Setup audio processing chain with filters
+        function setupAudioChain() {
+            // Create filter nodes
+            filterNodes.lowpass = audioContext.createBiquadFilter();
+            filterNodes.lowpass.type = 'lowpass';
+            filterNodes.lowpass.frequency.value = 8000;
+            
+            filterNodes.highpass = audioContext.createBiquadFilter();
+            filterNodes.highpass.type = 'highpass';
+            filterNodes.highpass.frequency.value = 80;
+            
+            filterNodes.gain = audioContext.createGain();
+            filterNodes.gain.gain.value = 1.0;
+            
+            // Connect nodes: source -> filters -> gain -> analyser -> destination
+        }
+        
+        // Play 5-second audio preview
+        function playPreview() {
+            if (!audioBuffer) return;
+            
+            stopPreview(); // Stop any current playback
+            
+            const playBtn = document.getElementById('playBtn');
+            const waveProgress = document.getElementById('waveProgress');
+            const sampleTime = document.getElementById('sampleTime');
+            
+            // Create new source
+            currentPlaybackSource = audioContext.createBufferSource();
+            currentPlaybackSource.buffer = audioBuffer;
+            
+            // Connect audio chain
+            currentPlaybackSource
+                .connect(filterNodes.highpass)
+                .connect(filterNodes.lowpass)
+                .connect(filterNodes.gain)
+                .connect(analyser)
+                .connect(audioContext.destination);
+            
+            // Start playback
+            const startTime = Math.random() * Math.max(0, audioBuffer.duration - playbackDuration);
+            currentPlaybackSource.start(0, startTime, playbackDuration);
+            
+            isPlaying = true;
+            playBtn.textContent = '⏸ Stop';
+            playbackStartTime = audioContext.currentTime;
+            
+            // Update progress bar and spectrum
+            updatePlaybackProgress();
+            updateSpectrumFromAudio();
+            
+            // Stop after 5 seconds
+            setTimeout(() => {
+                if (isPlaying) stopPreview();
+            }, playbackDuration * 1000);
+        }
+        
+        function stopPreview() {
+            if (currentPlaybackSource) {
+                currentPlaybackSource.stop();
+                currentPlaybackSource = null;
+            }
+            
+            isPlaying = false;
+            const playBtn = document.getElementById('playBtn');
+            const waveProgress = document.getElementById('waveProgress');
+            
+            playBtn.textContent = '▶ Play Preview';
+            waveProgress.style.width = '0%';
+            
+            // Resume idle spectrum animation
+            setTimeout(() => {
+                if (!isPlaying) {
+                    setInterval(() => animateSpectrum(), 150);
+                }
+            }, 100);
+        }
+        
+        function updatePlaybackProgress() {
+            if (!isPlaying) return;
+            
+            const elapsed = audioContext.currentTime - playbackStartTime;
+            const progress = Math.min(elapsed / playbackDuration, 1) * 100;
+            
+            const waveProgress = document.getElementById('waveProgress');
+            const sampleTime = document.getElementById('sampleTime');
+            
+            waveProgress.style.width = progress + '%';
+            sampleTime.textContent = `${elapsed.toFixed(1)}s / ${playbackDuration.toFixed(1)}s`;
+            
+            if (isPlaying && elapsed < playbackDuration) {
+                requestAnimationFrame(updatePlaybackProgress);
+            }
+        }
+        
+        // Setup control sliders with real-time audio effects
+        function setupControls() {
+            const sliders = {
+                noiseReduction: 'noiseValue',
+                freqCut: 'freqValue', 
+                clarity: 'clarityValue',
+                vocal: 'vocalValue',
+                volume: 'volumeValue'
+            };
+            
+            Object.entries(sliders).forEach(([sliderId, valueId]) => {
+                const slider = document.getElementById(sliderId);
+                const valueDisplay = document.getElementById(valueId);
+                
+                slider.addEventListener('input', () => {
+                    let value = slider.value;
+                    
+                    // Update display
+                    if (sliderId === 'freqCut') {
+                        valueDisplay.textContent = value + 'Hz';
+                        // Apply lowpass filter
+                        if (filterNodes.lowpass) {
+                            filterNodes.lowpass.frequency.value = parseInt(value);
+                        }
+                    } else {
+                        valueDisplay.textContent = value + '%';
+                        
+                        // Apply effects based on slider
+                        if (sliderId === 'volume' && filterNodes.gain) {
+                            filterNodes.gain.gain.value = parseFloat(value) / 100;
+                        }
+                        if (sliderId === 'noiseReduction' && filterNodes.highpass) {
+                            // Higher noise reduction = higher highpass frequency
+                            const freq = 80 + (parseFloat(value) * 2);
+                            filterNodes.highpass.frequency.value = freq;
+                        }
+                    }
+                    
+                    // Auto-play preview when adjusting controls
+                    if (audioBuffer && !isPlaying) {
+                        playPreview();
+                    }
+                });
+            });
+            
+            // Quality dropdown
+            document.getElementById('quality').addEventListener('change', (e) => {
+                document.getElementById('qualityValue').textContent = 
+                    e.target.options[e.target.selectedIndex].text;
+            });
+        }
+        
+        // Process audio (simulation)
+        async function processAudio() {
+            if (!audioBuffer || isProcessing) return;
+            
+            const status = document.getElementById('status');
+            const processBtn = document.getElementById('processBtn');
+            
+            isProcessing = true;
+            processBtn.disabled = true;
+            processBtn.textContent = '🔄 PROCESSING...';
+            
+            // Simulate processing time
+            const steps = ['Analyzing audio...', 'Removing noise...', 'Enhancing clarity...', 'Finalizing...'];
+            
+            for (let i = 0; i < steps.length; i++) {
+                status.textContent = steps[i];
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            
+            // Simulate audio processing completion
+            status.textContent = '✅ Audio cleaned successfully! Download ready.';
+            processBtn.textContent = '⬇️ DOWNLOAD CLEANED AUDIO';
+            processBtn.disabled = false;
+            
+            // Change button functionality to download
+            processBtn.onclick = downloadAudio;
+            
+            isProcessing = false;
+        }
+        
+        async function downloadAudio() {
+            if (!audioBuffer) return;
+            
+            const status = document.getElementById('status');
+            const processBtn = document.getElementById('processBtn');
+            
+            try {
+                // Track download (this will check limit and increment if allowed)
+                const track = await window.downloadTracker.trackDownload();
+                if (!track.success) {
+                    status.textContent = track.message || '❌ Download limit reached. Please subscribe for unlimited downloads.';
+                    window.downloadTracker.showSubscriptionPrompt();
+                    return;
+                }
+
+                status.textContent = '🎵 Processing full audio file...';
+                processBtn.disabled = true;
+                
+                const offlineContext = new OfflineAudioContext(
+                    audioBuffer.numberOfChannels,
+                    audioBuffer.length,
+                    audioBuffer.sampleRate
+                );
+                
+                const source = offlineContext.createBufferSource();
+                source.buffer = audioBuffer;
+                
+                // Get filter values
+                const noiseReduction = document.getElementById('noiseReduction').value;
+                const freqCut = document.getElementById('freqCut').value;
+                const clarity = document.getElementById('clarity').value;
+                const vocal = document.getElementById('vocal').value;
+                const volume = document.getElementById('volume').value / 100;
+                
+                // Apply filters
+                const lowpass = offlineContext.createBiquadFilter();
+                lowpass.type = 'lowpass';
+                lowpass.frequency.value = parseInt(freqCut);
+                lowpass.Q.value = 1;
+                
+                const highpass = offlineContext.createBiquadFilter();
+                highpass.type = 'highpass';
+                highpass.frequency.value = 80 + (parseFloat(noiseReduction) * 2);
+                highpass.Q.value = 0.7;
+                
+                const clarityFilter = offlineContext.createBiquadFilter();
+                clarityFilter.type = 'peaking';
+                clarityFilter.frequency.value = 3000;
+                clarityFilter.Q.value = 1;
+                clarityFilter.gain.value = parseFloat(clarity) * 0.3;
+                
+                const vocalFilter = offlineContext.createBiquadFilter();
+                vocalFilter.type = 'peaking';
+                vocalFilter.frequency.value = 1000;
+                vocalFilter.Q.value = 2;
+                vocalFilter.gain.value = parseFloat(vocal) * 0.25;
+                
+                const gainNode = offlineContext.createGain();
+                gainNode.gain.value = volume;
+                
+                source
+                    .connect(highpass)
+                    .connect(lowpass)
+                    .connect(clarityFilter)
+                    .connect(vocalFilter)
+                    .connect(gainNode)
+                    .connect(offlineContext.destination);
+                
+                source.start(0);
+                
+                status.textContent = '🔄 Rendering processed audio...';
+                const renderedBuffer = await offlineContext.startRendering();
+                
+                status.textContent = '📦 Converting to MP3...';
+                const mp3Buffer = await audioBufferToMp3(renderedBuffer);
+                
+                const blob = new Blob([mp3Buffer], { type: 'audio/mp3' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'cleaned_audio.mp3';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Usage status is updated by trackDownload function
+                status.textContent = '✅ MP3 download complete! Check your downloads folder.';
+            } catch (error) {
+                console.error('Download error:', error);
+                status.textContent = '❌ Download failed. Please try again.';
+            } finally {
+                processBtn.disabled = false;
+            }
+        }
+        
+        async function audioBufferToMp3(audioBuffer) {
+            const numberOfChannels = audioBuffer.numberOfChannels;
+            const length = audioBuffer.length;
+            const sampleRate = audioBuffer.sampleRate;
+            
+            const mp3encoder = new lamejs.Mp3Encoder(numberOfChannels, sampleRate, 128);
+            const mp3Data = [];
+            
+            const blockSize = 1152;
+            for (let i = 0; i < length; i += blockSize) {
+                const leftChannelData = audioBuffer.getChannelData(0);
+                const left = leftChannelData.subarray(i, i + blockSize);
+                
+                let right = null;
+                if (numberOfChannels > 1) {
+                    const rightChannelData = audioBuffer.getChannelData(1);
+                    right = rightChannelData.subarray(i, i + blockSize);
+                }
+                
+                const leftInt16 = new Int16Array(left.length);
+                for (let j = 0; j < left.length; j++) {
+                    leftInt16[j] = Math.max(-1, Math.min(1, left[j])) * 0x7FFF;
+                }
+                
+                let rightInt16 = null;
+                if (right) {
+                    rightInt16 = new Int16Array(right.length);
+                    for (let j = 0; j < right.length; j++) {
+                        rightInt16[j] = Math.max(-1, Math.min(1, right[j])) * 0x7FFF;
+                    }
+                }
+                
+                const mp3buf = mp3encoder.encodeBuffer(leftInt16, rightInt16);
+                if (mp3buf.length > 0) {
+                    mp3Data.push(mp3buf);
+                }
+            }
+            
+            const mp3buf = mp3encoder.flush();
+            if (mp3buf.length > 0) {
+                mp3Data.push(mp3buf);
+            }
+            
+            const totalLength = mp3Data.reduce((acc, buf) => acc + buf.length, 0);
+            const result = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const buf of mp3Data) {
+                result.set(buf, offset);
+                offset += buf.length;
+            }
+            
+            return result.buffer;
+        }
+        
+        // Konami Code Easter Egg
+        document.addEventListener('keydown', (e) => {
+            if (e.code === konamiCode[konamiIndex]) {
+                konamiIndex++;
+                if (konamiIndex === konamiCode.length) {
+                    showEasterEgg();
+                    konamiIndex = 0;
+                }
+            } else {
+                konamiIndex = 0;
+            }
+        });
+        
+        function showEasterEgg() {
+            document.getElementById('easterEgg').classList.remove('hidden');
+        }
+        
+        function closeEasterEgg() {
+            document.getElementById('easterEgg').classList.add('hidden');
+        }
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if usage status div exists, if not create it
+            if (!document.getElementById('usageStatus')) {
+                const usageStatus = document.createElement('div');
+                usageStatus.id = 'usageStatus';
+                usageStatus.style.cssText = `
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    background: rgba(0, 255, 136, 0.1);
+                    border: 1px solid #00ff88;
+                    padding: 10px;
+                    border-radius: 5px;
+                    font-family: 'Share Tech Mono', monospace;
+                    font-size: 0.8rem;
+                    z-index: 1000;
+                `;
+                document.body.appendChild(usageStatus);
+            }
+            
+            initSpectrum();
+            setupFileUpload();
+            setupControls();
+            
+            // Set up process button
+            document.getElementById('processBtn').addEventListener('click', processAudio);
+            
+            // Start spectrum animation immediately
+            setInterval(animateSpectrum, 150);
+        });
+    </script>
+    
+</body>
+</html>
