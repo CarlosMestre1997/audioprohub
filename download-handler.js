@@ -42,6 +42,9 @@ async function verifyAuthToken(token) {
             const data = await response.json();
             console.log('Authenticated user:', data.user);
             
+            // Store user email for consistent userId tracking
+            localStorage.setItem('audioHub_userEmail', data.user.email);
+            
             // Update UI to show authenticated state
             updateUIForAuthenticatedUser(data.user);
             
@@ -53,6 +56,7 @@ async function verifyAuthToken(token) {
         } else {
             // Invalid token, clear it
             localStorage.removeItem('audioHub_token');
+            localStorage.removeItem('audioHub_userEmail');
         }
     } catch (error) {
         console.error('Auth verification error:', error);
@@ -91,16 +95,27 @@ function updateUIForAuthenticatedUser(user) {
 }
 
 // Cross-domain compatible user ID management
+// Priority: 1. Authenticated user email, 2. Stored userId, 3. Browser fingerprint (no timestamp)
 function getUserId() {
+    // First check if user is authenticated from Audio Hub
+    const authToken = localStorage.getItem('audioHub_token');
+    const authUser = localStorage.getItem('audioHub_userEmail');
+    
+    if (authUser) {
+        console.log('Using authenticated user email as ID:', authUser);
+        return authUser; // Use email as consistent user ID
+    }
+    
+    // Otherwise, use or create a persistent browser-based ID
     let userId = localStorage.getItem('audiocleaner_userId');
     if (!userId) {
-        // Create a more unique ID using browser fingerprint + timestamp
-        const fingerprint = navigator.userAgent + screen.width + screen.height + new Date().getTimezoneOffset();
-        userId = 'user_' + btoa(fingerprint).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16) + '_' + Date.now();
+        // Create a stable ID using browser fingerprint (WITHOUT timestamp for consistency)
+        const fingerprint = navigator.userAgent + screen.width + screen.height + new Date().getTimezoneOffset() + navigator.language;
+        userId = 'anon_' + btoa(fingerprint).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32);
         localStorage.setItem('audiocleaner_userId', userId);
-        console.log('Generated new user ID:', userId);
+        console.log('Generated new anonymous user ID:', userId);
     } else {
-        console.log('Using existing user ID:', userId);
+        console.log('Using existing anonymous user ID:', userId);
     }
     return userId;
 }

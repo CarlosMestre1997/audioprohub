@@ -512,7 +512,11 @@ function handleAppLaunch(appName) {
         // Redirect to the actual app with authentication token
         let appUrl;
         if (appName.includes('AudioCleaner')) {
-            appUrl = window.location.origin + '/audiocleaner-pro.html';
+            // Handle both local and GitHub Pages paths
+            const basePath = window.location.hostname === 'carlosmestre1997.github.io' 
+                ? '/audioprohub' 
+                : '';
+            appUrl = window.location.origin + basePath + '/audiocleaner-pro.html';
         } else if (appName.includes('SamplX')) {
             appUrl = 'https://carlosmestre1997.github.io/audioprohub/samplx/';
         } else {
