@@ -1,7 +1,7 @@
 // Audio Pro Suite Landing Page JavaScript
 
 // Configuration
-const AUTH_API_BASE = process.env.NODE_ENV === 'production' 
+const AUTH_API_BASE = window.location.hostname === 'carlosmestre1997.github.io' 
     ? 'https://audio-hub-auth.onrender.com' 
     : 'http://localhost:3001';
 
@@ -167,6 +167,7 @@ async function handleLogin() {
     showNotification('Logging in...', 'info');
     
     try {
+        console.log('Attempting login to:', `${AUTH_API_BASE}/api/auth/login`);
         const response = await fetch(`${AUTH_API_BASE}/api/auth/login`, {
             method: 'POST',
             headers: {
@@ -174,6 +175,7 @@ async function handleLogin() {
             },
             body: JSON.stringify({ email, password })
         });
+        console.log('Login response status:', response.status);
 
         const data = await response.json();
 
@@ -223,6 +225,7 @@ async function handleSignup() {
     showNotification('Creating your account...', 'info');
     
     try {
+        console.log('Attempting signup to:', `${AUTH_API_BASE}/api/auth/signup`);
         const response = await fetch(`${AUTH_API_BASE}/api/auth/signup`, {
             method: 'POST',
             headers: {
@@ -230,6 +233,7 @@ async function handleSignup() {
             },
             body: JSON.stringify({ name, email, password })
         });
+        console.log('Signup response status:', response.status);
 
         const data = await response.json();
 
@@ -479,7 +483,7 @@ function handleAppLaunch(appName) {
         if (appName.includes('AudioCleaner')) {
             appUrl = 'https://audiocleaner.site';
         } else if (appName.includes('SamplX')) {
-            appUrl = 'https://samplx.com'; // Your SamplX domain
+            appUrl = 'https://carlosmestre1997.github.io/audioprohub/samplx/';
         } else {
             showNotification('App not found', 'error');
             return;

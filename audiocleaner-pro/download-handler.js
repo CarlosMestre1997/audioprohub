@@ -3,7 +3,7 @@
 const API_BASE = 'https://audiocleaner.onrender.com';
 
 // Audio Hub integration
-const AUTH_HUB_BASE = window.location.hostname === 'audiocleaner.site' 
+const AUTH_HUB_BASE = window.location.hostname === 'audiocleaner.site' || window.location.hostname === 'carlosmestre1997.github.io'
     ? 'https://audio-hub-auth.onrender.com' 
     : 'http://localhost:3001';
 

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: audio-hub-auth
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node auth-server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: JWT_SECRET
+        value: my-super-secret-jwt-key-2025
