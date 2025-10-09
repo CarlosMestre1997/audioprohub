@@ -52,6 +52,7 @@ app.use(cors({
   origin: [
     'https://audiocleaner.site',
     'https://audiocleaner.onrender.com',
+    'https://carlosmestre1997.github.io',
     'http://127.0.0.1:5500', 
     'http://localhost:3000',
     'http://localhost:5500'
@@ -382,7 +383,7 @@ app.post('/api/track-download', async (req, res) => {
       downloads: downloadCounts[userId],
       remainingDownloads: remaining,
       isPro: false,
-      showUpgradeModal: remaining <= 1 // Show modal when 1 or 0 remaining
+      showUpgradeModal: remaining === 0 // Show modal when no downloads remaining
     });
   } catch (error) {
     console.error('Error tracking download:', error);
