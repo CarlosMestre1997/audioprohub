@@ -1,8 +1,8 @@
-name: Deploy Landing Page to GitHub Pages
+name: Deploy Audio Hub Suite to GitHub Pages
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, main ]
   workflow_dispatch:
 
 permissions:
