@@ -1,81 +1,255 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-color-scheme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Hub Suite - Redirecting...</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-            color: white;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            text-align: center;
-        }
-        .container {
-            max-width: 600px;
-            padding: 2rem;
-        }
-        .logo {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, #00b4d8, #90e0ef);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .message {
-            font-size: 1.2rem;
-            margin-bottom: 2rem;
-            opacity: 0.8;
-        }
-        .link {
-            display: inline-block;
-            background: #00b4d8;
-            color: white;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: background 0.3s ease;
-        }
-        .link:hover {
-            background: #0096b3;
-        }
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-left: 4px solid #00b4d8;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 2rem auto;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+    <title>Audio Pro Suite - Professional Audio Tools</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <div class="logo">Audio Hub Suite</div>
-        <div class="message">Redirecting to Audio Hub...</div>
-        <div class="spinner"></div>
-        <a href="/landing/index.html" class="link">Go to Audio Hub</a>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header__content">
+                <div class="header__logo">
+                    <div class="logo">
+                        <div class="logo__wave"></div>
+                        <span class="logo__text">Audio Pro Suite</span>
+                    </div>
+                </div>
+                <nav class="header__nav">
+                    <a href="#home" class="nav__link">Home</a>
+                    <a href="#apps" class="nav__link">Apps</a>
+                    <a href="#pricing" class="nav__link">Pricing</a>
+                    <a href="#about" class="nav__link">About</a>
+                    <a href="#contact" class="nav__link">Contact</a>
+                </nav>
+                <div class="header__auth">
+                    <button class="btn btn--outline btn--sm" id="loginBtn">Login</button>
+                    <button class="btn btn--primary btn--sm" id="signupBtn">Sign Up</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero" id="home">
+        <div class="container">
+            <div class="hero__content">
+                <div class="hero__text">
+                    <h1 class="hero__title">Professional Audio Tools at Your Fingertips</h1>
+                    <p class="hero__subtitle">Transform your audio workflow with our suite of professional-grade tools. Clean, slice, and enhance your audio files with real-time processing and premium quality results.</p>
+                    <div class="hero__ctas">
+                        <button class="btn btn--primary btn--lg" id="audioCleanerBtn">Try AudioCleaner Pro</button>
+                        <button class="btn btn--primary btn--lg" id="samplxBtn">Try SamplX</button>
+                    </div>
+                </div>
+                <div class="hero__visual">
+                    <div class="sound-wave">
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Apps Showcase -->
+    <section class="apps" id="apps">
+        <div class="container">
+            <div class="apps__grid">
+                <div class="app-card">
+                    <div class="app-card__header">
+                        <h3 class="app-card__title">AudioCleaner Pro</h3>
+                        <div class="app-card__icon">🎵</div>
+                    </div>
+                    <p class="app-card__description">Remove noise, fuzziness, and unwanted artifacts from your audio files. Listen to changes in real-time before downloading your cleaned files.</p>
+                    <ul class="app-card__features">
+                        <li>Real-time playback</li>
+                        <li>Noise reduction</li>
+                        <li>Audio enhancement</li>
+                        <li>Professional quality</li>
+                    </ul>
+                    <button class="btn btn--primary btn--full-width">Try AudioCleaner Pro</button>
+                </div>
+                <div class="app-card">
+                    <div class="app-card__header">
+                        <h3 class="app-card__title">SamplX</h3>
+                        <div class="app-card__icon">🎛️</div>
+                    </div>
+                    <p class="app-card__description">Slice audio files into samples and edit each piece individually. Transpose, adjust tempo, and apply effects with up to 10 samples playback per file.</p>
+                    <ul class="app-card__features">
+                        <li>Audio slicing</li>
+                        <li>Individual sample editing</li>
+                        <li>Tempo & transpose controls</li>
+                        <li>Real-time effects</li>
+                    </ul>
+                    <button class="btn btn--primary btn--full-width">Try SamplX</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+        <div class="container">
+            <div class="features__header">
+                <h2 class="features__title">Why Choose Our Audio Tools?</h2>
+                <p class="features__subtitle">Professional-grade features designed for audio enthusiasts and professionals</p>
+            </div>
+            <div class="features__grid">
+                <div class="feature-card">
+                    <div class="feature-card__icon">🎵</div>
+                    <h3 class="feature-card__title">Real-time Processing</h3>
+                    <p class="feature-card__description">Hear your changes instantly as you work with your audio files</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card__icon">⭐</div>
+                    <h3 class="feature-card__title">Professional Quality</h3>
+                    <p class="feature-card__description">Industry-standard audio processing algorithms for pristine results</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card__icon">🎯</div>
+                    <h3 class="feature-card__title">User-friendly Interface</h3>
+                    <p class="feature-card__description">Intuitive design that makes professional audio editing accessible</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card__icon">📁</div>
+                    <h3 class="feature-card__title">Multiple Format Support</h3>
+                    <p class="feature-card__description">Work with all popular audio formats seamlessly</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="pricing" id="pricing">
+        <div class="container">
+            <div class="pricing__header">
+                <h2 class="pricing__title">Choose Your Plan</h2>
+                <p class="pricing__subtitle">Start free and upgrade when you're ready for more power</p>
+            </div>
+            <div class="pricing__grid">
+                <div class="pricing-card">
+                    <div class="pricing-card__header">
+                        <h3 class="pricing-card__title">Free</h3>
+                        <div class="pricing-card__price">$0<span>/month</span></div>
+                    </div>
+                    <ul class="pricing-card__features">
+                        <li>Basic audio cleaning</li>
+                        <li>Limited sample editing</li>
+                        <li>Standard quality export</li>
+                        <li>5 files per day</li>
+                    </ul>
+                    <button class="btn btn--outline btn--full-width">Get Started Free</button>
+                </div>
+                <div class="pricing-card pricing-card--featured">
+                    <div class="pricing-card__badge">Most Popular</div>
+                    <div class="pricing-card__header">
+                        <h3 class="pricing-card__title">Premium</h3>
+                        <div class="pricing-card__price">$19.99<span>/month</span></div>
+                    </div>
+                    <ul class="pricing-card__features">
+                        <li>Advanced noise reduction</li>
+                        <li>Unlimited audio slicing</li>
+                        <li>Professional quality export</li>
+                        <li>Unlimited files</li>
+                        <li>Priority support</li>
+                        <li>Advanced effects</li>
+                    </ul>
+                    <button class="btn btn--primary btn--full-width">Upgrade to Premium</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <div class="footer__brand">
+                    <div class="logo">
+                        <div class="logo__wave"></div>
+                        <span class="logo__text">Audio Pro Suite</span>
+                    </div>
+                    <p class="footer__description">Professional audio tools for creators and professionals.</p>
+                </div>
+                <div class="footer__links">
+                    <div class="footer__section">
+                        <h4 class="footer__heading">Product</h4>
+                        <ul class="footer__list">
+                            <li><a href="#" class="footer__link">AudioCleaner Pro</a></li>
+                            <li><a href="#" class="footer__link">SamplX</a></li>
+                            <li><a href="#" class="footer__link">Pricing</a></li>
+                            <li><a href="#" class="footer__link">Features</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer__section">
+                        <h4 class="footer__heading">Support</h4>
+                        <ul class="footer__list">
+                            <li><a href="#" class="footer__link">Help Center</a></li>
+                            <li><a href="#" class="footer__link">Contact</a></li>
+                            <li><a href="#" class="footer__link">Privacy Policy</a></li>
+                            <li><a href="#" class="footer__link">Terms of Service</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer__bottom">
+                <p class="footer__copyright">© 2025 Audio Pro Suite. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Login Modal -->
+    <div class="modal hidden" id="loginModal">
+        <div class="modal__backdrop" id="modalBackdrop"></div>
+        <div class="modal__content">
+            <div class="modal__header">
+                <h3 class="modal__title">Login to Your Account</h3>
+                <button class="modal__close" id="closeModal">&times;</button>
+            </div>
+            <div class="modal__body">
+                <form class="login-form" id="loginForm">
+                    <div class="form-group">
+                        <label class="form-label" for="email">Email</label>
+                        <input type="email" class="form-control" id="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="password">Password</label>
+                        <input type="password" class="form-control" id="password" required>
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--full-width">Login</button>
+                    <p class="login-form__switch">Don't have an account? <a href="#" id="switchToSignup">Sign up</a></p>
+                </form>
+                <form class="signup-form hidden" id="signupForm">
+                    <div class="form-group">
+                        <label class="form-label" for="signupName">Full Name</label>
+                        <input type="text" class="form-control" id="signupName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="signupEmail">Email</label>
+                        <input type="email" class="form-control" id="signupEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="signupPassword">Password</label>
+                        <input type="password" class="form-control" id="signupPassword" required>
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--full-width">Sign Up</button>
+                    <p class="login-form__switch">Already have an account? <a href="#" id="switchToLogin">Login</a></p>
+                </form>
+            </div>
+        </div>
     </div>
 
-    <script>
-        // Auto-redirect after 3 seconds
-        setTimeout(() => {
-            window.location.href = '/landing/index.html';
-        }, 3000);
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>
