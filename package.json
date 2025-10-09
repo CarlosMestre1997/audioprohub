@@ -1,0 +1,37 @@
+{
+  "name": "audio-hub-suite",
+  "version": "1.0.0",
+  "description": "A comprehensive suite of professional audio tools with centralized authentication",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:landing\" \"npm run dev:audiocleaner\"",
+    "dev:landing": "cd landing/backend && npm run dev",
+    "dev:audiocleaner": "cd audiocleaner-pro/backend && npm run dev",
+    "install:all": "npm run install:landing && npm run install:audiocleaner",
+    "install:landing": "cd landing/backend && npm install",
+    "install:audiocleaner": "cd audiocleaner-pro/backend && npm install",
+    "build": "echo 'Building all services...'",
+    "test": "echo 'Running tests...'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CarlosMestre1997/audio-hub-suite.git"
+  },
+  "keywords": [
+    "audio",
+    "processing",
+    "web-audio",
+    "authentication",
+    "subscription",
+    "monorepo"
+  ],
+  "author": "Audio Hub Suite",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "workspaces": [
+    "landing/backend",
+    "audiocleaner-pro/backend"
+  ]
+}

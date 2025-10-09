@@ -1,0 +1,12 @@
+exclude:
+  - backend/
+  - node_modules/
+  - .gitignore
+  - package.json
+  - package-lock.json
+  - README.md
+
+include:
+  - "*.html"
+  - "*.css"
+  - "*.js"
