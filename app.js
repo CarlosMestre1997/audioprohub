@@ -462,18 +462,37 @@ async function initiateUpgrade(plan) {
 
 // CTA button handlers
 function initializeCTAButtons() {
-    const audioCleanerBtns = document.querySelectorAll('button[id="audioCleanerBtn"], button:contains("AudioCleaner")');
-    const samplxBtns = document.querySelectorAll('button[id="samplxBtn"], button:contains("SamplX")');
-    
     // AudioCleaner Pro buttons
-    document.addEventListener('click', (e) => {
-        if (e.target.textContent.includes('AudioCleaner')) {
+    const audioCleanerBtn = document.getElementById('audioCleanerBtn');
+    if (audioCleanerBtn) {
+        audioCleanerBtn.addEventListener('click', (e) => {
             e.preventDefault();
+            console.log('🎵 AudioCleaner Pro button clicked');
+            handleAppLaunch('AudioCleaner Pro');
+        });
+    }
+    
+    // SamplX buttons
+    const samplxBtn = document.getElementById('samplxBtn');
+    if (samplxBtn) {
+        samplxBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('🎛️ SamplX button clicked');
+            handleAppLaunch('SamplX');
+        });
+    }
+    
+    // Also handle buttons without IDs
+    document.addEventListener('click', (e) => {
+        if (e.target.textContent.includes('AudioCleaner') && !e.target.id) {
+            e.preventDefault();
+            console.log('🎵 AudioCleaner Pro button (no ID) clicked');
             handleAppLaunch('AudioCleaner Pro');
         }
         
-        if (e.target.textContent.includes('SamplX')) {
+        if (e.target.textContent.includes('SamplX') && !e.target.id) {
             e.preventDefault();
+            console.log('🎛️ SamplX button (no ID) clicked');
             handleAppLaunch('SamplX');
         }
     });
@@ -493,7 +512,7 @@ function handleAppLaunch(appName) {
         // Redirect to the actual app with authentication token
         let appUrl;
         if (appName.includes('AudioCleaner')) {
-            appUrl = 'https://audiocleaner.site';
+            appUrl = window.location.origin + '/audiocleaner-pro.html';
         } else if (appName.includes('SamplX')) {
             appUrl = 'https://carlosmestre1997.github.io/audioprohub/samplx/';
         } else {
