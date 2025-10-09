@@ -144,28 +144,44 @@
                         <div class="pricing-card__price">$0<span>/month</span></div>
                     </div>
                     <ul class="pricing-card__features">
+                        <li>3 free downloads</li>
                         <li>Basic audio cleaning</li>
-                        <li>Limited sample editing</li>
+                        <li>Sample editing (limited)</li>
                         <li>Standard quality export</li>
-                        <li>5 files per day</li>
                     </ul>
-                    <button class="btn btn--outline btn--full-width">Get Started Free</button>
+                    <button class="btn btn--outline btn--full-width" id="signupBtn">Get Started Free</button>
                 </div>
                 <div class="pricing-card pricing-card--featured">
                     <div class="pricing-card__badge">Most Popular</div>
                     <div class="pricing-card__header">
-                        <h3 class="pricing-card__title">Premium</h3>
-                        <div class="pricing-card__price">$19.99<span>/month</span></div>
+                        <h3 class="pricing-card__title">Monthly</h3>
+                        <div class="pricing-card__price">$9.99<span>/month</span></div>
                     </div>
                     <ul class="pricing-card__features">
+                        <li>Unlimited downloads</li>
                         <li>Advanced noise reduction</li>
                         <li>Unlimited audio slicing</li>
                         <li>Professional quality export</li>
-                        <li>Unlimited files</li>
                         <li>Priority support</li>
                         <li>Advanced effects</li>
                     </ul>
-                    <button class="btn btn--primary btn--full-width">Upgrade to Premium</button>
+                    <button class="btn btn--primary btn--full-width" onclick="initiateUpgrade('monthly')">Upgrade Now</button>
+                </div>
+                <div class="pricing-card">
+                    <div class="pricing-card__header">
+                        <h3 class="pricing-card__title">Yearly</h3>
+                        <div class="pricing-card__price">$79.99<span>/year</span></div>
+                        <div class="pricing-card__savings" style="color: #00d4b8; font-size: 0.9rem; margin-top: 0.5rem;">Save 33%!</div>
+                    </div>
+                    <ul class="pricing-card__features">
+                        <li>All Monthly features</li>
+                        <li>2 months free</li>
+                        <li>Unlimited downloads</li>
+                        <li>Advanced noise reduction</li>
+                        <li>Priority support</li>
+                        <li>Exclusive updates</li>
+                    </ul>
+                    <button class="btn btn--primary btn--full-width" onclick="initiateUpgrade('yearly')">Upgrade Now</button>
                 </div>
             </div>
         </div>
@@ -250,6 +266,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
 </body>
 </html>

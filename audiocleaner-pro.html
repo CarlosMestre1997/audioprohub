@@ -21,10 +21,58 @@
             overflow-x: hidden;
         }
         
+        /* Navigation Bar */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.95);
+            border-bottom: 2px solid #00ff88;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+        }
+        
+        .navbar-logo {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 1.5rem;
+            color: #00ff88;
+            text-decoration: none;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        
+        .navbar-back {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+        
+        .navbar-back:hover {
+            background: rgba(0, 255, 136, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        }
+        
+        .navbar-right {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
         .header {
             text-align: center;
             padding: 2rem 0;
             position: relative;
+            margin-top: 80px;
         }
         
         .logo {
@@ -422,18 +470,22 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.0/lame.min.js"></script>
 
-    <div id="usageStatus" style="
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    background: rgba(0, 255, 136, 0.1);
-    border: 1px solid #00ff88;
-    padding: 10px;
-    border-radius: 5px;
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 0.8rem;
-    z-index: 1000;
-"></div>
+    <!-- Navigation Bar -->
+    <div class="navbar">
+        <a href="index.html" class="navbar-logo">🎵 AudioCleaner Pro</a>
+        <div class="navbar-right">
+            <div id="usageStatus" style="
+                background: rgba(0, 255, 136, 0.1);
+                border: 1px solid #00ff88;
+                padding: 10px 15px;
+                border-radius: 4px;
+                font-family: 'Share Tech Mono', monospace;
+                font-size: 0.85rem;
+                color: #00ff88;
+            "></div>
+            <a href="index.html" class="navbar-back">← Back to Hub</a>
+        </div>
+    </div>
 
     <script>
         let audioContext;
@@ -920,25 +972,6 @@
         }
         // Initialize everything
         document.addEventListener('DOMContentLoaded', () => {
-            // Check if usage status div exists, if not create it
-            if (!document.getElementById('usageStatus')) {
-                const usageStatus = document.createElement('div');
-                usageStatus.id = 'usageStatus';
-                usageStatus.style.cssText = `
-                    position: fixed;
-                    top: 10px;
-                    right: 10px;
-                    background: rgba(0, 255, 136, 0.1);
-                    border: 1px solid #00ff88;
-                    padding: 10px;
-                    border-radius: 5px;
-                    font-family: 'Share Tech Mono', monospace;
-                    font-size: 0.8rem;
-                    z-index: 1000;
-                `;
-                document.body.appendChild(usageStatus);
-            }
-            
             initSpectrum();
             setupFileUpload();
             setupControls();
