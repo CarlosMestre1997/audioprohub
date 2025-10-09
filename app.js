@@ -572,16 +572,26 @@ function initializeAnimations() {
 
     function enhanceWaveAnimation() {
         let index = 0;
-        animationInterval = setInterval(() => {
+        let time = 0;
+        
+        function animateFrame() {
+            time += 0.05;
             waveBars.forEach((bar, i) => {
-                const height = Math.random() * 80 + 20;
-                const delay = Math.abs(i - index) * 0.1;
-                setTimeout(() => {
-                    bar.style.height = height + '%';
-                }, delay * 100);
+                // Use sine waves for smooth, rhythmic animation
+                const baseHeight = 40 + Math.sin(time + i * 0.5) * 30;
+                const variation = Math.sin(time * 2 + i * 0.3) * 15;
+                const height = baseHeight + variation;
+                bar.style.height = height + '%';
+                bar.style.transition = 'height 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)';
             });
-            index = (index + 1) % waveBars.length;
-        }, 500);
+            
+            if (animationInterval) {
+                requestAnimationFrame(animateFrame);
+            }
+        }
+        
+        animationInterval = true;
+        animateFrame();
     }
 
     // Start enhanced animation when hero is visible
@@ -590,7 +600,7 @@ function initializeAnimations() {
             if (entry.isIntersecting) {
                 enhanceWaveAnimation();
             } else {
-                clearInterval(animationInterval);
+                animationInterval = false;
             }
         });
     }, { threshold: 0.5 });
