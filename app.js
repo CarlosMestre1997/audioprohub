@@ -5,6 +5,9 @@ const AUTH_API_BASE = window.location.hostname === 'carlosmestre1997.github.io'
     ? 'https://audio-hub-auth.onrender.com' 
     : 'http://localhost:3001';
 
+console.log('🌐 Current hostname:', window.location.hostname);
+console.log('🔗 Using API base:', AUTH_API_BASE);
+
 // Global state
 let currentUser = null;
 let authToken = null;
