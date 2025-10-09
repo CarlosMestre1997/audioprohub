@@ -13,19 +13,52 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Audio Hub Landing Page Loading...');
     console.log('🔗 AUTH_API_BASE:', AUTH_API_BASE);
     
-    // Initialize the application
-    initializeApp();
-    checkAuthStatus();
+    // Check if required elements exist
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    const audioCleanerBtn = document.getElementById('audioCleanerBtn');
+    const samplxBtn = document.getElementById('samplxBtn');
     
-    console.log('✅ App initialization complete');
+    console.log('🔍 Element check:');
+    console.log('  loginBtn:', loginBtn);
+    console.log('  signupBtn:', signupBtn);
+    console.log('  audioCleanerBtn:', audioCleanerBtn);
+    console.log('  samplxBtn:', samplxBtn);
+    
+    // Initialize the application
+    try {
+        initializeApp();
+        checkAuthStatus();
+        console.log('✅ App initialization complete');
+    } catch (error) {
+        console.error('❌ App initialization failed:', error);
+    }
 });
 
 function initializeApp() {
-    initializeModal();
-    initializeNavigation();
-    initializeFormHandling();
-    initializeCTAButtons();
-    initializeAnimations();
+    try {
+        console.log('🔧 Initializing modal...');
+        initializeModal();
+        console.log('✅ Modal initialized');
+        
+        console.log('🔧 Initializing navigation...');
+        initializeNavigation();
+        console.log('✅ Navigation initialized');
+        
+        console.log('🔧 Initializing form handling...');
+        initializeFormHandling();
+        console.log('✅ Form handling initialized');
+        
+        console.log('🔧 Initializing CTA buttons...');
+        initializeCTAButtons();
+        console.log('✅ CTA buttons initialized');
+        
+        console.log('🔧 Initializing animations...');
+        initializeAnimations();
+        console.log('✅ Animations initialized');
+    } catch (error) {
+        console.error('❌ Error in initializeApp:', error);
+    }
 }
 
 // Modal functionality
@@ -39,6 +72,23 @@ function initializeModal() {
     const switchToLogin = document.getElementById('switchToLogin');
     const loginForm = document.getElementById('loginForm');
     const signupForm = document.getElementById('signupForm');
+    
+    console.log('🔍 Modal elements check:');
+    console.log('  loginModal:', loginModal);
+    console.log('  loginBtn:', loginBtn);
+    console.log('  signupBtn:', signupBtn);
+    console.log('  closeModal:', closeModal);
+    console.log('  modalBackdrop:', modalBackdrop);
+    console.log('  switchToSignup:', switchToSignup);
+    console.log('  switchToLogin:', switchToLogin);
+    console.log('  loginForm:', loginForm);
+    console.log('  signupForm:', signupForm);
+    
+    // Check if all required elements exist
+    if (!loginModal || !loginBtn || !signupBtn) {
+        console.error('❌ Missing required modal elements!');
+        return;
+    }
 
     // Open modal functions
     function openModal(showSignup = false) {
