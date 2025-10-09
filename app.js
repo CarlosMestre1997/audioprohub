@@ -499,13 +499,6 @@ function initializeCTAButtons() {
 }
 
 function handleAppLaunch(appName) {
-    if (!currentUser) {
-        showNotification('Please log in to access our apps', 'warning');
-        // Open login modal
-        document.getElementById('loginBtn').click();
-        return;
-    }
-    
     showNotification(`Launching ${appName}...`, 'info');
     
     setTimeout(() => {
@@ -524,11 +517,13 @@ function handleAppLaunch(appName) {
             return;
         }
         
-        // Pass authentication token via URL parameter
-        const authUrl = `${appUrl}?token=${encodeURIComponent(authToken)}`;
+        // Pass authentication token via URL parameter if user is logged in
+        const finalUrl = currentUser && authToken 
+            ? `${appUrl}?token=${encodeURIComponent(authToken)}`
+            : appUrl;
         
         // Open in new tab
-        window.open(authUrl, '_blank');
+        window.open(finalUrl, '_blank');
         showNotification(`${appName} opened in new tab`, 'success');
     }, 1000);
 }
