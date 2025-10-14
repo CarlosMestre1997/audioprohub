@@ -378,6 +378,8 @@ const SamplX = () => {
     source.buffer = audioBuffersRef.current[idx];
 
     const gainNode = audioContextRef.current.createGain();
+    gainNode.gain.value = settings.volume !== undefined ? settings.volume : 1;
+    
     const filterNode = audioContextRef.current.createBiquadFilter();
     filterNode.type = 'lowpass';
     filterNode.frequency.value = settings.filter || 10000;
@@ -429,9 +431,20 @@ const SamplX = () => {
       const merger = audioContextRef.current.createChannelMerger(2);
       dryGain.connect(merger);
       wetGain.connect(merger);
-      merger.connect(audioContextRef.current.destination);
+      
+      // Connect to recording if active, otherwise to speakers
+      if (isRecording && recordingBufferRef.current) {
+        merger.connect(recordingBufferRef.current.gainNode);
+      } else {
+        merger.connect(audioContextRef.current.destination);
+      }
     } else {
-      chain.connect(audioContextRef.current.destination);
+      // Connect to recording if active, otherwise to speakers
+      if (isRecording && recordingBufferRef.current) {
+        chain.connect(recordingBufferRef.current.gainNode);
+      } else {
+        chain.connect(audioContextRef.current.destination);
+      }
     }
 
     source.start();
@@ -634,51 +647,25 @@ const SamplX = () => {
 
   const startRecording = async () => {
     try {
-      let stream;
+      // Create a destination node to capture audio playing in the app
+      const destination = audioContextRef.current.createMediaStreamDestination();
       
-      // Try to get screen/tab audio first (Chrome only)
-      if (navigator.mediaDevices.getDisplayMedia) {
-        const choice = confirm(
-          'Choose recording source:\n\n' +
-          'OK = Screen/Tab Audio (system audio, Chrome only)\n' +
-          'Cancel = Microphone Input'
-        );
-        
-        if (choice) {
-          try {
-            // Request screen share with audio
-            stream = await navigator.mediaDevices.getDisplayMedia({
-              video: true,
-              audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false
-              }
-            });
-            
-            // We only want audio, so stop video tracks
-            stream.getVideoTracks().forEach(track => track.stop());
-            
-            // Check if audio track exists
-            if (stream.getAudioTracks().length === 0) {
-              throw new Error('No audio track in screen share. Make sure to check "Share audio" when selecting a tab.');
-            }
-          } catch (displayError) {
-            console.error('Screen audio capture failed:', displayError);
-            alert('Screen audio capture failed. Make sure to:\n1. Select a browser tab\n2. Check "Share audio"\n\nFalling back to microphone...');
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          }
-        } else {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        }
-      } else {
-        // Fallback for browsers that don't support getDisplayMedia
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
+      // Create a gain node for the recording
+      const recordingGain = audioContextRef.current.createGain();
+      recordingGain.connect(destination);
+      recordingGain.connect(audioContextRef.current.destination);
       
-      streamRef.current = stream;
+      // Store the recording setup
+      streamRef.current = destination.stream;
+      recordingBufferRef.current = {
+        destination: destination,
+        gainNode: recordingGain,
+        startTime: audioContextRef.current.currentTime,
+        chunks: []
+      };
       
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      // Set up MediaRecorder
+      mediaRecorderRef.current = new MediaRecorder(destination.stream);
       recordedChunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = (e) => {
@@ -696,17 +683,20 @@ const SamplX = () => {
         setSliceSettings({});
         audioBuffersRef.current = {};
 
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-          streamRef.current = null;
+        // Clean up recording nodes
+        if (recordingBufferRef.current) {
+          recordingBufferRef.current.gainNode.disconnect();
+          recordingBufferRef.current = null;
         }
       };
 
       mediaRecorderRef.current.start();
       setIsRecording(true);
+      
+      console.log('🎙️ Recording app audio - play your samples now!');
     } catch (error) {
       console.error('Error starting recording:', error);
-      alert('Failed to start recording. Please allow audio access.');
+      alert('Failed to start recording: ' + error.message);
     }
   };
 
@@ -890,25 +880,25 @@ const SamplX = () => {
   return (
     <div className="min-h-screen bg-zinc-900 text-gray-100">
       {/* Navigation Bar */}
-      <nav className="fixed top-0 left-0 right-0 bg-black bg-opacity-95 border-b-2 border-teal-500 px-6 py-3 flex justify-between items-center z-50 backdrop-blur-sm">
+      <nav className="fixed top-0 left-0 right-0 bg-black bg-opacity-95 border-b-2 border-blue-500 px-6 py-3 flex justify-between items-center z-50 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <button 
             onClick={goBackToHub}
-            className="text-teal-400 hover:text-teal-300 transition"
+            className="text-blue-400 hover:text-blue-300 transition"
           >
             <Home size={24} />
           </button>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">
-            🎛️ SamplX
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+            SamplX
           </h1>
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="bg-zinc-800 border border-teal-500 rounded px-4 py-2 text-sm flex items-center gap-2">
+          <div className="bg-zinc-800 border border-blue-500 rounded px-4 py-2 text-sm flex items-center gap-2">
             {isPremium ? (
-              <span className="text-emerald-400">✨ Premium - Unlimited Downloads</span>
+              <span className="text-blue-400">✨ Premium - Unlimited Downloads</span>
             ) : (
-              <span className="text-teal-400">
+              <span className="text-blue-400">
                 Downloads: {downloadsRemaining} remaining
               </span>
             )}
@@ -917,7 +907,7 @@ const SamplX = () => {
                 console.log('🔄 Manual premium refresh triggered');
                 refreshPremiumStatus();
               }}
-              className="text-xs text-teal-400 hover:text-teal-300 ml-2"
+              className="text-xs text-blue-400 hover:text-blue-300 ml-2"
               title="Refresh premium status"
             >
               🔄
@@ -925,7 +915,7 @@ const SamplX = () => {
           </div>
           <button 
             onClick={goBackToHub}
-            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded transition text-sm font-medium"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition text-sm font-medium"
           >
             ← Back to Hub
           </button>
@@ -945,7 +935,7 @@ const SamplX = () => {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 rounded flex items-center gap-2 transition shadow-lg"
+              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 rounded flex items-center gap-2 transition shadow-lg"
             >
               <Upload size={16} /> Load Sample
             </button>
@@ -980,10 +970,10 @@ const SamplX = () => {
             </button>
           </div>
 
-          <div className="bg-zinc-800 rounded-lg p-4 mb-6 border border-teal-700">
+          <div className="bg-zinc-800 rounded-lg p-4 mb-6 border border-blue-700">
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm text-gray-400 flex items-center gap-2">
-                <Scissors size={16} className="text-teal-400" /> 
+                <Scissors size={16} className="text-blue-400" /> 
                 {pendingSliceStart === null ? (
                   'Click to set slice START'
                 ) : (
@@ -1025,7 +1015,7 @@ const SamplX = () => {
                   >
                     +
                   </button>
-                  <span className="text-xs px-2 text-teal-400">{zoomLevel.toFixed(1)}x</span>
+                  <span className="text-xs px-2 text-blue-400">{zoomLevel.toFixed(1)}x</span>
                   <button
                     onClick={() => handleZoom(-1)}
                     className="px-2 py-1 hover:bg-zinc-700 rounded transition text-xs"
@@ -1063,7 +1053,7 @@ const SamplX = () => {
                   canvas.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'40\' viewBox=\'0 0 20 40\'><line x1=\'10\' y1=\'0\' x2=\'10\' y2=\'40\' stroke=\'%2300b4d8\' stroke-width=\'2\'/><circle cx=\'10\' cy=\'20\' r=\'3\' fill=\'%2300b4d8\'/></svg>") 10 20, crosshair';
                 }
               }}
-              className="w-full bg-zinc-950 rounded border border-teal-700"
+              className="w-full bg-zinc-950 rounded border border-blue-700"
             />
           </div>
 
@@ -1073,16 +1063,16 @@ const SamplX = () => {
               return (
                 <div
                   key={idx}
-                  className={'bg-zinc-800 rounded-lg p-4 border-2 transition ' + (activeSlice === idx ? 'border-teal-500' : 'border-transparent')}
+                  className={'bg-zinc-800 rounded-lg p-4 border-2 transition ' + (activeSlice === idx ? 'border-blue-500' : 'border-transparent')}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-lg font-bold text-teal-400">
+                    <span className="text-lg font-bold text-blue-400">
                       Slice {(idx + 1) % 10} [{(idx + 1) % 10}]
                     </span>
                     <div className="flex gap-2">
                       <button
                         onClick={() => playSlice(idx)}
-                        className="p-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 rounded transition"
+                        className="p-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 rounded transition"
                       >
                         <Play size={16} />
                       </button>
@@ -1097,6 +1087,19 @@ const SamplX = () => {
                   </div>
 
                   <div className="space-y-2 text-xs">
+                    <div>
+                      <label className="text-gray-400">Volume: {((settings.volume || 1) * 100).toFixed(0)}%</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={settings.volume || 1}
+                        onChange={(e) => updateSliceSetting(idx, 'volume', parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
                     <div>
                       <label className="text-gray-400">Transpose: {settings.transpose || 0}</label>
                       <input
@@ -1167,11 +1170,11 @@ const SamplX = () => {
             })}
           </div>
 
-          <div className="bg-zinc-800 rounded-lg p-4 flex gap-4 justify-center border border-teal-700">
+          <div className="bg-zinc-800 rounded-lg p-4 flex gap-4 justify-center border border-blue-700">
             <button
               onClick={exportAllSlices}
               disabled={!audioBuffer || slices.length === 0}
-              className="px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center gap-2 transition shadow-lg"
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center gap-2 transition shadow-lg"
             >
               <Download size={16} /> Export All Slices (WAV)
             </button>
