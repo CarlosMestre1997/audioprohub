@@ -10,15 +10,27 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 3000;
 
 // File path for storing download counts and email index
-const DOWNLOADS_FILE = path.join(__dirname, 'data', 'downloads.json');
-const EMAIL_INDEX_FILE = path.join(__dirname, 'data', 'email_index.json');
+const DATA_DIR = path.join(__dirname, 'data');
+const DOWNLOADS_FILE = path.join(DATA_DIR, 'downloads.json');
+const EMAIL_INDEX_FILE = path.join(DATA_DIR, 'email_index.json');
+
+// Ensure data directory exists
+async function ensureDataDir() {
+    try {
+        await fs.mkdir(DATA_DIR, { recursive: true });
+    } catch (error) {
+        console.log('Data directory already exists or created');
+    }
+}
 
 // Function to load download counts from file
 async function loadDownloadCounts() {
     try {
+        await ensureDataDir();
         const data = await fs.readFile(DOWNLOADS_FILE, 'utf8');
         return JSON.parse(data);
     } catch (error) {
+        console.log('Loading download counts - file not found, starting fresh');
         // If file doesn't exist or is invalid, return empty object
         return {};
     }
@@ -26,21 +38,37 @@ async function loadDownloadCounts() {
 
 // Function to save download counts to file
 async function saveDownloadCounts(counts) {
-    await fs.writeFile(DOWNLOADS_FILE, JSON.stringify(counts, null, 2));
+    try {
+        await ensureDataDir();
+        await fs.writeFile(DOWNLOADS_FILE, JSON.stringify(counts, null, 2));
+        console.log('Download counts saved successfully');
+    } catch (error) {
+        console.error('Error saving download counts:', error);
+        throw error;
+    }
 }
 
 // Email index helpers: map emailHash -> userId
 async function loadEmailIndex() {
   try {
+    await ensureDataDir();
     const data = await fs.readFile(EMAIL_INDEX_FILE, 'utf8');
     return JSON.parse(data);
   } catch (e) {
+    console.log('Loading email index - file not found, starting fresh');
     return {};
   }
 }
 
 async function saveEmailIndex(index) {
-  await fs.writeFile(EMAIL_INDEX_FILE, JSON.stringify(index, null, 2));
+  try {
+    await ensureDataDir();
+    await fs.writeFile(EMAIL_INDEX_FILE, JSON.stringify(index, null, 2));
+    console.log('Email index saved successfully');
+  } catch (error) {
+    console.error('Error saving email index:', error);
+    throw error;
+  }
 }
 
 function hashEmail(email) {
@@ -387,7 +415,12 @@ app.post('/api/track-download', async (req, res) => {
     });
   } catch (error) {
     console.error('Error tracking download:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
