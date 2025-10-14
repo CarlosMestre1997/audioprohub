@@ -94,7 +94,8 @@ app.use(cors({
 
 app.use(express.json());
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, '..'))); // Serve files from parent directory
+// Only serve admin.html from public folder, not the entire parent directory
+app.use('/admin', express.static(path.join(__dirname, 'public')));
 
 // Simple test endpoint
 app.get('/test', async (req, res) => {
