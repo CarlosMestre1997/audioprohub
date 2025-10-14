@@ -201,14 +201,14 @@ const SamplX = () => {
     if (!file) return;
 
     try {
-      const arrayBuffer = await file.arrayBuffer();
+    const arrayBuffer = await file.arrayBuffer();
       const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer);
       setAudioBuffer(decoded);
-      setSlices([]);
-      setSliceSettings({});
-      setPendingSliceStart(null);
-      setHistory([]);
-      setHistoryIndex(-1);
+    setSlices([]);
+    setSliceSettings({});
+    setPendingSliceStart(null);
+    setHistory([]);
+    setHistoryIndex(-1);
       audioBuffersRef.current = {};
     } catch (error) {
       console.error('Error loading audio:', error);
@@ -270,22 +270,22 @@ const SamplX = () => {
       const sliceEndX = ((slice.end - startTime) / visibleDuration) * width;
 
       if (sliceEndX >= 0 && sliceStartX <= width) {
-        const isActive = idx === activeSlice;
+    const isActive = idx === activeSlice;
         ctx.fillStyle = isActive ? 'rgba(0, 230, 118, 0.2)' : 'rgba(0, 180, 216, 0.15)';
-        ctx.fillRect(
-          Math.max(0, sliceStartX),
-          0,
+      ctx.fillRect(
+        Math.max(0, sliceStartX), 
+        0, 
           Math.min(width, sliceEndX) - Math.max(0, sliceStartX),
           height
-        );
-
+      );
+    
         ctx.strokeStyle = isActive ? '#00e676' : '#00b4d8';
-        ctx.lineWidth = 2;
+      ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(sliceStartX, 0);
+      ctx.beginPath();
+      ctx.moveTo(sliceStartX, 0);
         ctx.lineTo(sliceStartX, height);
-        ctx.stroke();
+      ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(sliceEndX, 0);
         ctx.lineTo(sliceEndX, height);
@@ -305,11 +305,11 @@ const SamplX = () => {
         ctx.strokeStyle = '#fbbf24';
         ctx.lineWidth = 3;
         ctx.setLineDash([10, 5]);
-        ctx.beginPath();
+      ctx.beginPath();
         ctx.moveTo(pendingX, 0);
         ctx.lineTo(pendingX, height);
-        ctx.stroke();
-        ctx.setLineDash([]);
+      ctx.stroke();
+      ctx.setLineDash([]);
       }
     }
   };
@@ -321,7 +321,7 @@ const SamplX = () => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const x = (e.clientX - rect.left) * scaleX;
-
+    
     const visibleDuration = audioBuffer.duration / zoomLevel;
     const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
     const clickTime = startTime + (x / canvas.width) * visibleDuration;
@@ -336,9 +336,9 @@ const SamplX = () => {
         };
         const newSlices = [...slices, newSlice];
         const newSettings = { ...sliceSettings };
-        setSlices(newSlices);
+      setSlices(newSlices);
         saveToHistory(newSlices, newSettings);
-        setPendingSliceStart(null);
+      setPendingSliceStart(null);
       } else {
         alert('End time must be after start time');
       }
@@ -372,9 +372,9 @@ const SamplX = () => {
 
       audioBuffersRef.current[idx] = sliceBuffer;
     }
-
+    
     stopAllAudio();
-
+    
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBuffersRef.current[idx];
 
@@ -399,14 +399,14 @@ const SamplX = () => {
 
       lfo.frequency.value = 0.5;
       lfoGain.gain.value = 0.005 * settings.flanger;
-
+      
       lfo.connect(lfoGain);
       lfoGain.connect(delay.delayTime);
-
+      
       chain.connect(delay);
       delay.connect(gainNode);
       chain = gainNode;
-
+      
       lfo.start();
       flangerNodesRef.current[idx] = { lfo, delay };
     } else {
@@ -460,7 +460,7 @@ const SamplX = () => {
   const createReverbBuffer = (duration, sampleRate) => {
     const length = sampleRate * duration;
     const buffer = audioContextRef.current.createBuffer(2, length, sampleRate);
-
+    
     for (let channel = 0; channel < 2; channel++) {
       const data = buffer.getChannelData(channel);
       for (let i = 0; i < length; i++) {
@@ -648,62 +648,104 @@ const SamplX = () => {
 
   const startRecording = async () => {
     try {
-      // Create a destination node to capture audio playing in the app
+      // Create a MediaStreamDestination to capture live audio
       const destination = audioContextRef.current.createMediaStreamDestination();
       
       // Create a gain node for the recording
       const recordingGain = audioContextRef.current.createGain();
       recordingGain.connect(destination);
-      recordingGain.connect(audioContextRef.current.destination);
+      recordingGain.connect(audioContextRef.current.destination); // Also play through speakers
       
-      // Store the recording setup
-      streamRef.current = destination.stream;
-      recordingBufferRef.current = {
-        destination: destination,
-        gainNode: recordingGain,
-        startTime: audioContextRef.current.currentTime,
-        chunks: []
-      };
-      
-      // Set up MediaRecorder
-      mediaRecorderRef.current = new MediaRecorder(destination.stream);
+      // Set up MediaRecorder to capture the stream
+      const mediaRecorder = new MediaRecorder(destination.stream);
+      mediaRecorderRef.current = mediaRecorder;
       recordedChunksRef.current = [];
-
-      mediaRecorderRef.current.ondataavailable = (e) => {
+      
+      mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           recordedChunksRef.current.push(e.data);
         }
       };
-
-      mediaRecorderRef.current.onstop = async () => {
-        const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
-        
-        // Save the recording for download
-        setRecordedAudio(blob);
-        
-        console.log('✅ Recording saved! You can now download it.');
-
-        // Clean up recording nodes
-        if (recordingBufferRef.current) {
-          recordingBufferRef.current.gainNode.disconnect();
-          recordingBufferRef.current = null;
-        }
-      };
-
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
       
-      console.log('🎙️ Recording app audio - play your samples now!');
+      mediaRecorder.start(100); // Capture in 100ms chunks for better quality
+      
+      // Store the recording setup
+      recordingBufferRef.current = {
+        destination: destination,
+        gainNode: recordingGain,
+        startTime: audioContextRef.current.currentTime
+      };
+      
+      setIsRecording(true);
+      console.log('🎙️ Recording started - play your samples now!');
     } catch (error) {
       console.error('Error starting recording:', error);
       alert('Failed to start recording: ' + error.message);
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+  const stopRecording = async () => {
+    if (!isRecording || !mediaRecorderRef.current) return;
+    
+    try {
       setIsRecording(false);
+      console.log('🔄 Processing recording...');
+      
+      // Stop the MediaRecorder
+      if (mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      
+      // Wait a bit for the last chunks
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Create blob from recorded chunks
+      const webmBlob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+      
+      console.log('Recorded blob size:', webmBlob.size, 'bytes');
+      
+      if (webmBlob.size === 0) {
+        alert('No audio was captured. Make sure to play some samples while recording!');
+        if (recordingBufferRef.current) {
+          recordingBufferRef.current.gainNode.disconnect();
+          recordingBufferRef.current = null;
+        }
+        return;
+      }
+      
+      // Convert WebM to WAV for better compatibility
+      try {
+        const arrayBuffer = await webmBlob.arrayBuffer();
+        const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+        
+        // Convert to WAV
+        const wavBlob = await audioBufferToWav(audioBuffer);
+        setRecordedAudio(wavBlob);
+        
+        console.log('✅ Recording complete! Click "Download Recording" to save.');
+      } catch (decodeError) {
+        // If decoding fails, just save the webm
+        console.warn('Could not decode to WAV, saving as WebM:', decodeError);
+        setRecordedAudio(webmBlob);
+        console.log('✅ Recording complete (WebM format)! Click "Download Recording" to save.');
+      }
+      
+      // Clean up
+      if (recordingBufferRef.current) {
+        recordingBufferRef.current.gainNode.disconnect();
+        recordingBufferRef.current = null;
+      }
+      
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      
+      // Clean up
+      if (recordingBufferRef.current) {
+        recordingBufferRef.current.gainNode.disconnect();
+        recordingBufferRef.current = null;
+      }
+      
+      alert('Error processing recording: ' + error.message);
     }
   };
 
@@ -716,13 +758,17 @@ const SamplX = () => {
     const url = URL.createObjectURL(recordedAudio);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `samplx-recording-${Date.now()}.webm`;
+    
+    // Determine file extension based on blob type
+    const extension = recordedAudio.type.includes('wav') ? 'wav' : 'webm';
+    a.download = `samplx-recording-${Date.now()}.${extension}`;
+    
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    console.log('📥 Recording downloaded!');
+    console.log(`📥 Recording downloaded as ${extension.toUpperCase()}!`);
   };
 
   const updateSliceSetting = (idx, key, value) => {
@@ -942,7 +988,7 @@ const SamplX = () => {
 
       {/* Main Content */}
       <div className="pt-20 px-6 pb-6 font-mono">
-        <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto">
           <div className="mb-6 flex gap-2 flex-wrap">
             <input
               type="file"
@@ -997,122 +1043,122 @@ const SamplX = () => {
           </div>
 
           <div className="bg-zinc-800 rounded-lg p-4 mb-6 border border-blue-700">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm text-gray-400 flex items-center gap-2">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-sm text-gray-400 flex items-center gap-2">
                 <Scissors size={16} className="text-blue-400" /> 
-                {pendingSliceStart === null ? (
-                  'Click to set slice START'
-                ) : (
-                  <span className="text-yellow-400">Click to set slice END (or cancel)</span>
-                )}
+              {pendingSliceStart === null ? (
+                'Click to set slice START'
+              ) : (
+                <span className="text-yellow-400">Click to set slice END (or cancel)</span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {pendingSliceStart !== null && (
+                <button
+                  onClick={cancelPendingSlice}
+                  className="px-3 py-1 bg-red-500 hover:bg-red-600 rounded text-xs transition"
+                >
+                  Cancel Slice
+                </button>
+              )}
+              
+              <div className="flex items-center gap-1 bg-zinc-900 rounded px-2 py-1">
+                <button
+                  onClick={() => handlePan(-1)}
+                  disabled={zoomLevel === 1}
+                  className="px-2 py-1 hover:bg-zinc-700 rounded disabled:opacity-30 transition text-xs"
+                >
+                  ←
+                </button>
+                <button
+                  onClick={() => handlePan(1)}
+                  disabled={zoomLevel === 1}
+                  className="px-2 py-1 hover:bg-zinc-700 rounded disabled:opacity-30 transition text-xs"
+                >
+                  →
+                </button>
               </div>
               
-              <div className="flex items-center gap-2">
-                {pendingSliceStart !== null && (
-                  <button
-                    onClick={cancelPendingSlice}
-                    className="px-3 py-1 bg-red-500 hover:bg-red-600 rounded text-xs transition"
-                  >
-                    Cancel Slice
-                  </button>
-                )}
-                
-                <div className="flex items-center gap-1 bg-zinc-900 rounded px-2 py-1">
-                  <button
-                    onClick={() => handlePan(-1)}
-                    disabled={zoomLevel === 1}
-                    className="px-2 py-1 hover:bg-zinc-700 rounded disabled:opacity-30 transition text-xs"
-                  >
-                    ←
-                  </button>
-                  <button
-                    onClick={() => handlePan(1)}
-                    disabled={zoomLevel === 1}
-                    className="px-2 py-1 hover:bg-zinc-700 rounded disabled:opacity-30 transition text-xs"
-                  >
-                    →
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-1 bg-zinc-900 rounded px-2 py-1">
-                  <button
-                    onClick={() => handleZoom(1)}
-                    className="px-2 py-1 hover:bg-zinc-700 rounded transition text-xs"
-                  >
-                    +
-                  </button>
-                  <span className="text-xs px-2 text-blue-400">{zoomLevel.toFixed(1)}x</span>
-                  <button
-                    onClick={() => handleZoom(-1)}
-                    className="px-2 py-1 hover:bg-zinc-700 rounded transition text-xs"
-                  >
-                    −
-                  </button>
-                </div>
-                
-                {zoomLevel > 1 && (
-                  <button
-                    onClick={resetZoom}
-                    className="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-xs transition"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
-            <canvas
-              ref={canvasRef}
-              width={1200}
-              height={200}
-              onClick={handleCanvasClick}
-              onMouseMove={(e) => {
-                if (!audioBuffer) return;
-                const canvas = canvasRef.current;
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / rect.width;
-                const x = (e.clientX - rect.left) * scaleX;
-                const visibleDuration = audioBuffer.duration / zoomLevel;
-                const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
-                const hoverTime = startTime + (x / canvas.width) * visibleDuration;
-                
-                if (hoverTime >= 0 && hoverTime <= audioBuffer.duration) {
-                  canvas.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'40\' viewBox=\'0 0 20 40\'><line x1=\'10\' y1=\'0\' x2=\'10\' y2=\'40\' stroke=\'%2300b4d8\' stroke-width=\'2\'/><circle cx=\'10\' cy=\'20\' r=\'3\' fill=\'%2300b4d8\'/></svg>") 10 20, crosshair';
-                }
-              }}
-              className="w-full bg-zinc-950 rounded border border-blue-700"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {slices.map((slice, idx) => {
-              const settings = sliceSettings[idx] || {};
-              return (
-                <div
-                  key={idx}
-                  className={'bg-zinc-800 rounded-lg p-4 border-2 transition ' + (activeSlice === idx ? 'border-blue-500' : 'border-transparent')}
+              <div className="flex items-center gap-1 bg-zinc-900 rounded px-2 py-1">
+                <button
+                  onClick={() => handleZoom(1)}
+                  className="px-2 py-1 hover:bg-zinc-700 rounded transition text-xs"
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-lg font-bold text-blue-400">
-                      Slice {(idx + 1) % 10} [{(idx + 1) % 10}]
-                    </span>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => playSlice(idx)}
-                        className="p-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 rounded transition"
-                      >
-                        <Play size={16} />
-                      </button>
-                      <button
-                        onClick={() => deleteSlice(idx)}
-                        className="p-2 bg-red-500 hover:bg-red-600 rounded transition"
-                        title="Delete slice"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
+                  +
+                </button>
+                  <span className="text-xs px-2 text-blue-400">{zoomLevel.toFixed(1)}x</span>
+                <button
+                  onClick={() => handleZoom(-1)}
+                  className="px-2 py-1 hover:bg-zinc-700 rounded transition text-xs"
+                >
+                  −
+                </button>
+              </div>
+              
+              {zoomLevel > 1 && (
+                <button
+                  onClick={resetZoom}
+                  className="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-xs transition"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+          <canvas
+            ref={canvasRef}
+            width={1200}
+            height={200}
+            onClick={handleCanvasClick}
+            onMouseMove={(e) => {
+              if (!audioBuffer) return;
+              const canvas = canvasRef.current;
+              const rect = canvas.getBoundingClientRect();
+              const scaleX = canvas.width / rect.width;
+              const x = (e.clientX - rect.left) * scaleX;
+              const visibleDuration = audioBuffer.duration / zoomLevel;
+              const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
+              const hoverTime = startTime + (x / canvas.width) * visibleDuration;
+              
+              if (hoverTime >= 0 && hoverTime <= audioBuffer.duration) {
+                  canvas.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'40\' viewBox=\'0 0 20 40\'><line x1=\'10\' y1=\'0\' x2=\'10\' y2=\'40\' stroke=\'%2300b4d8\' stroke-width=\'2\'/><circle cx=\'10\' cy=\'20\' r=\'3\' fill=\'%2300b4d8\'/></svg>") 10 20, crosshair';
+              }
+            }}
+              className="w-full bg-zinc-950 rounded border border-blue-700"
+          />
+        </div>
 
-                  <div className="space-y-2 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          {slices.map((slice, idx) => {
+            const settings = sliceSettings[idx] || {};
+            return (
+              <div
+                key={idx}
+                  className={'bg-zinc-800 rounded-lg p-4 border-2 transition ' + (activeSlice === idx ? 'border-blue-500' : 'border-transparent')}
+              >
+                <div className="flex items-center justify-between mb-3">
+                    <span className="text-lg font-bold text-blue-400">
+                    Slice {(idx + 1) % 10} [{(idx + 1) % 10}]
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => playSlice(idx)}
+                        className="p-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 rounded transition"
+                    >
+                      <Play size={16} />
+                    </button>
+                    <button
+                      onClick={() => deleteSlice(idx)}
+                      className="p-2 bg-red-500 hover:bg-red-600 rounded transition"
+                      title="Delete slice"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
                     <div>
                       <label className="text-gray-400">Volume: {((settings.volume || 1) * 100).toFixed(0)}%</label>
                       <input
@@ -1126,84 +1172,84 @@ const SamplX = () => {
                       />
                     </div>
 
-                    <div>
-                      <label className="text-gray-400">Transpose: {settings.transpose || 0}</label>
-                      <input
-                        type="range"
-                        min="-12"
-                        max="12"
-                        step="1"
-                        value={settings.transpose || 0}
-                        onChange={(e) => updateSliceSetting(idx, 'transpose', parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-gray-400">Transpose: {settings.transpose || 0}</label>
+                    <input
+                      type="range"
+                      min="-12"
+                      max="12"
+                      step="1"
+                      value={settings.transpose || 0}
+                      onChange={(e) => updateSliceSetting(idx, 'transpose', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="text-gray-400">Tempo: {(settings.tempo || 1).toFixed(2)}x</label>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2"
-                        step="0.1"
-                        value={settings.tempo || 1}
-                        onChange={(e) => updateSliceSetting(idx, 'tempo', parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-gray-400">Tempo: {(settings.tempo || 1).toFixed(2)}x</label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.1"
+                      value={settings.tempo || 1}
+                      onChange={(e) => updateSliceSetting(idx, 'tempo', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="text-gray-400">Filter: {settings.filter || 10000}Hz</label>
-                      <input
-                        type="range"
-                        min="100"
-                        max="10000"
-                        step="100"
-                        value={settings.filter || 10000}
-                        onChange={(e) => updateSliceSetting(idx, 'filter', parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-gray-400">Filter: {settings.filter || 10000}Hz</label>
+                    <input
+                      type="range"
+                      min="100"
+                      max="10000"
+                      step="100"
+                      value={settings.filter || 10000}
+                      onChange={(e) => updateSliceSetting(idx, 'filter', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="text-gray-400">Flanger: {((settings.flanger || 0) * 100).toFixed(0)}%</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={settings.flanger || 0}
-                        onChange={(e) => updateSliceSetting(idx, 'flanger', parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-gray-400">Flanger: {((settings.flanger || 0) * 100).toFixed(0)}%</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={settings.flanger || 0}
+                      onChange={(e) => updateSliceSetting(idx, 'flanger', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="text-gray-400">Reverb: {((settings.reverb || 0) * 100).toFixed(0)}%</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={settings.reverb || 0}
-                        onChange={(e) => updateSliceSetting(idx, 'reverb', parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-gray-400">Reverb: {((settings.reverb || 0) * 100).toFixed(0)}%</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={settings.reverb || 0}
+                      onChange={(e) => updateSliceSetting(idx, 'reverb', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
+        </div>
 
           <div className="bg-zinc-800 rounded-lg p-4 flex gap-4 justify-center border border-blue-700">
-            <button
-              onClick={exportAllSlices}
-              disabled={!audioBuffer || slices.length === 0}
+          <button
+            onClick={exportAllSlices}
+            disabled={!audioBuffer || slices.length === 0}
               className="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center gap-2 transition shadow-lg"
-            >
-              <Download size={16} /> Export All Slices (WAV)
-            </button>
+          >
+            <Download size={16} /> Export All Slices (WAV)
+          </button>
           </div>
         </div>
       </div>
