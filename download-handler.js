@@ -34,29 +34,48 @@ function getUserId() {
 window.downloadTracker = {
     async checkDownloadPermission() {
         try {
-            console.log('Checking download permission...');
+            console.log('=== CHECKING DOWNLOAD PERMISSION ===');
+            console.log('API_BASE:', API_BASE);
+            console.log('Current hostname:', window.location.hostname);
+            
             const userId = getUserId();
             console.log('Using userId:', userId);
             
-            const response = await fetch(`${API_BASE}/api/check-download`, {
+            const url = `${API_BASE}/api/check-download`;
+            console.log('Fetching:', url);
+            
+            const requestBody = { userId: userId };
+            console.log('Request body:', requestBody);
+            
+            const response = await fetch(url, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ userId: userId })
+                body: JSON.stringify(requestBody)
             });
             
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+            
             if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Error response body:', errorText);
                 throw new Error(`Server returned ${response.status}: ${response.statusText}`);
             }
             
             const data = await response.json();
-            console.log('Download permission check response:', data);
+            console.log('✅ Download permission check response:', data);
             return data;
         } catch (error) {
-            console.error('Error checking download permission:', error);
+            console.error('❌ Error checking download permission:', error);
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
             return { canDownload: false, error: error.message };
         }
     },
