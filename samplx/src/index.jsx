@@ -58,15 +58,24 @@ const SamplX = () => {
       setUserEmail(email);
       // Check if user is premium from landing page subscription
       const userData = localStorage.getItem('audioHub_user');
+      console.log('=== SAMPLX PREMIUM CHECK ===');
+      console.log('User email:', email);
+      console.log('User data from localStorage:', userData);
+      
       if (userData) {
         try {
           const user = JSON.parse(userData);
-          setIsPremium(user.subscription === 'premium');
+          console.log('Parsed user object:', user);
+          console.log('User subscription:', user.subscription);
+          const isUserPremium = user.subscription === 'premium';
+          console.log('Is user premium?', isUserPremium);
+          setIsPremium(isUserPremium);
         } catch (e) {
           console.log('Error parsing user data:', e);
           setIsPremium(false);
         }
       } else {
+        console.log('No user data found in localStorage');
         setIsPremium(false);
       }
     }

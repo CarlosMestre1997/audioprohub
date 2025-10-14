@@ -3,6 +3,12 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// Check if Stripe key is configured
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('❌ STRIPE_SECRET_KEY environment variable is not set!');
+  console.error('Please set your Stripe secret key in Render.com environment variables.');
+}
 const fs = require('fs').promises;
 const path = require('path');
 const app = express();
