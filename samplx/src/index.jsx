@@ -36,6 +36,25 @@ const SamplX = () => {
     // Check for auth token and premium status
     checkAuthStatus();
     
+    // Check if user returned from Stripe payment
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentSuccess = urlParams.get('payment');
+    const sessionId = urlParams.get('session_id');
+    
+    if (paymentSuccess === 'success' && sessionId) {
+      console.log('=== STRIPE PAYMENT SUCCESS DETECTED ===');
+      console.log('Session ID:', sessionId);
+      
+      // Refresh premium status after successful payment
+      setTimeout(() => {
+        refreshPremiumStatus();
+        alert('🎉 Payment successful! You now have unlimited downloads!');
+      }, 1000);
+      
+      // Clean up URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
     // Load download count from localStorage
     const savedCount = localStorage.getItem('samplx_downloads');
     if (savedCount) {
@@ -43,10 +62,17 @@ const SamplX = () => {
       setDownloadsRemaining(Math.max(0, 3 - parseInt(savedCount)));
     }
     
+    // Check premium status periodically (every 10 seconds)
+    const premiumCheckInterval = setInterval(() => {
+      console.log('⏰ Periodic premium status check...');
+      refreshPremiumStatus();
+    }, 10000);
+    
     return () => {
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
+      clearInterval(premiumCheckInterval);
     };
   }, []);
 
@@ -79,6 +105,28 @@ const SamplX = () => {
         setIsPremium(false);
       }
     }
+  };
+
+  // Function to refresh premium status (call this after Stripe payment)
+  const refreshPremiumStatus = () => {
+    console.log('=== REFRESHING PREMIUM STATUS ===');
+    const userData = localStorage.getItem('audioHub_user');
+    console.log('Refreshed user data:', userData);
+    
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        const isUserPremium = user.subscription === 'premium';
+        console.log('Refreshed premium status:', isUserPremium);
+        setIsPremium(isUserPremium);
+        return isUserPremium;
+      } catch (e) {
+        console.log('Error refreshing user data:', e);
+        setIsPremium(false);
+        return false;
+      }
+    }
+    return false;
   };
 
   useEffect(() => {
@@ -856,7 +904,7 @@ const SamplX = () => {
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="bg-zinc-800 border border-teal-500 rounded px-4 py-2 text-sm">
+          <div className="bg-zinc-800 border border-teal-500 rounded px-4 py-2 text-sm flex items-center gap-2">
             {isPremium ? (
               <span className="text-emerald-400">✨ Premium - Unlimited Downloads</span>
             ) : (
@@ -864,6 +912,16 @@ const SamplX = () => {
                 Downloads: {downloadsRemaining} remaining
               </span>
             )}
+            <button 
+              onClick={() => {
+                console.log('🔄 Manual premium refresh triggered');
+                refreshPremiumStatus();
+              }}
+              className="text-xs text-teal-400 hover:text-teal-300 ml-2"
+              title="Refresh premium status"
+            >
+              🔄
+            </button>
           </div>
           <button 
             onClick={goBackToHub}
