@@ -31,12 +31,41 @@ function getUserId() {
     return userId;
 }
 
+// Check if user has premium subscription
+function isUserPremium() {
+    // Check if user has premium subscription from landing page
+    const userData = localStorage.getItem('audioHub_user');
+    if (userData) {
+        try {
+            const user = JSON.parse(userData);
+            return user.subscription === 'premium';
+        } catch (e) {
+            console.log('Error parsing user data:', e);
+        }
+    }
+    return false;
+}
+
 window.downloadTracker = {
     async checkDownloadPermission() {
         try {
             console.log('=== CHECKING DOWNLOAD PERMISSION ===');
             console.log('API_BASE:', API_BASE);
             console.log('Current hostname:', window.location.hostname);
+            
+            // Check if user has premium subscription from landing page
+            const isPremium = isUserPremium();
+            console.log('User premium status:', isPremium);
+            
+            if (isPremium) {
+                console.log('✅ Premium user - unlimited downloads');
+                return {
+                    canDownload: true,
+                    downloads: 'unlimited',
+                    remainingDownloads: 'unlimited',
+                    isPro: true
+                };
+            }
             
             const userId = getUserId();
             console.log('Using userId:', userId);
@@ -82,6 +111,22 @@ window.downloadTracker = {
 
     async trackDownload() {
         try {
+            // Check if user has premium subscription from landing page
+            const isPremium = isUserPremium();
+            console.log('User premium status:', isPremium);
+            
+            if (isPremium) {
+                console.log('✅ Premium user - unlimited downloads');
+                const premiumData = {
+                    success: true,
+                    downloads: 'unlimited',
+                    remainingDownloads: 'unlimited',
+                    isPro: true
+                };
+                this.updateUsageStatus(premiumData);
+                return premiumData;
+            }
+            
             const userId = getUserId();
             console.log('Tracking download for userId:', userId);
             

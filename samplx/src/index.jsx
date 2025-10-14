@@ -56,9 +56,19 @@ const SamplX = () => {
     
     if (email) {
       setUserEmail(email);
-      // Check if user is premium (this would normally come from your auth API)
-      // For now, we'll assume free users
-      setIsPremium(false);
+      // Check if user is premium from landing page subscription
+      const userData = localStorage.getItem('audioHub_user');
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          setIsPremium(user.subscription === 'premium');
+        } catch (e) {
+          console.log('Error parsing user data:', e);
+          setIsPremium(false);
+        }
+      } else {
+        setIsPremium(false);
+      }
     }
   };
 
@@ -683,7 +693,119 @@ const SamplX = () => {
   };
 
   const showUpgradeModal = () => {
-    alert('You\'ve reached your free download limit!\n\nUpgrade to Premium for unlimited downloads.\n\nGo back to the Audio Hub to upgrade.');
+    // Create subscription modal similar to AudioCleaner
+    if (document.getElementById('subscriptionModal')) return;
+    
+    const backdrop = document.createElement('div');
+    backdrop.id = 'subscriptionModal';
+    backdrop.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(5px);
+    `;
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      background: rgba(0, 0, 0, 0.95);
+      border: 1px solid #00b4d8;
+      padding: 24px;
+      border-radius: 8px;
+      max-width: 720px;
+      width: 90%;
+      box-shadow: 0 0 30px rgba(0, 180, 216, 0.2);
+      color: #00b4d8;
+      font-family: 'Share Tech Mono', monospace;
+    `;
+    
+    modal.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="margin:0;color:#66b3ff;">Upgrade to Premium</h2>
+        <button id="closeSubModal" style="background:transparent;border:1px solid #00b4d8;color:#00b4d8;padding:6px 10px;cursor:pointer;">✕</button>
+      </div>
+      <p style="margin:0 0 16px;color:#aaccff;">You've reached your free download limit. Choose a plan for unlimited downloads.</p>
+      <div style="display:grid;grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));gap:12px;">
+        <div id="plan-free" style="border:1px solid #00b4d8;padding:12px;border-radius:6px;background:rgba(0,180,216,0.05);">
+          <div style="font-weight:bold;margin-bottom:8px;">Free</div>
+          <div style="color:#aaccff;font-size:12px;margin-bottom:12px;">3 downloads • Try it out</div>
+          <button style="width:100%;background:transparent;border:1px solid #00b4d8;color:#00b4d8;padding:8px;cursor:pointer;">Continue Free</button>
+        </div>
+        <div id="plan-monthly" style="border:1px solid #00b4d8;padding:12px;border-radius:6px;background:rgba(0,180,216,0.08);">
+          <div style="font-weight:bold;margin-bottom:4px;">Monthly</div>
+          <div style="color:#00b4d8;font-weight:bold;margin-bottom:6px;">$9.99/mo</div>
+          <div style="color:#aaccff;font-size:12px;margin-bottom:12px;">Unlimited downloads • Cancel anytime</div>
+          <button style="width:100%;background:#00b4d8;border:1px solid #00b4d8;color:#000;padding:8px;cursor:pointer;">Subscribe Monthly</button>
+        </div>
+        <div id="plan-yearly" style="border:1px solid #00b4d8;padding:12px;border-radius:6px;background:rgba(0,180,216,0.08);">
+          <div style="font-weight:bold;margin-bottom:4px;">Yearly</div>
+          <div style="color:#00b4d8;font-weight:bold;margin-bottom:6px;">$79.99/yr</div>
+          <div style="color:#aaccff;font-size:12px;margin-bottom:12px;">Unlimited downloads • Best value</div>
+          <button style="width:100%;background:#00b4d8;border:1px solid #00b4d8;color:#000;padding:8px;cursor:pointer;">Subscribe Yearly</button>
+        </div>
+      </div>
+    `;
+    
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+    
+    // Event handlers
+    modal.querySelector('#closeSubModal').onclick = () => {
+      backdrop.remove();
+    };
+    
+    modal.querySelector('#plan-free button').onclick = () => {
+      backdrop.remove();
+    };
+    
+    modal.querySelector('#plan-monthly button').onclick = () => {
+      initiateSubscription('monthly');
+    };
+    
+    modal.querySelector('#plan-yearly button').onclick = () => {
+      initiateSubscription('yearly');
+    };
+  };
+  
+  const initiateSubscription = async (plan) => {
+    try {
+      // Use AudioCleaner backend for Stripe checkout
+      const API_BASE = 'https://audiocleaner.onrender.com';
+      const priceMap = {
+        monthly: 'price_1SAdUnFZ7vA4ogcaqoy0uJoM',
+        yearly: 'price_1SAdVwFZ7vA4ogcaayfar2S8Q'
+      };
+      const priceId = priceMap[plan];
+      if (!priceId) throw new Error('Unknown plan');
+      
+      const response = await fetch(`${API_BASE}/api/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          priceId: priceId,
+          plan: plan
+        })
+      });
+      
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert('Error creating checkout session. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error initiating subscription:', error);
+      alert('Error creating checkout session. Please try again.');
+    }
   };
 
   const goBackToHub = () => {
