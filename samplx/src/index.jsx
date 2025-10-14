@@ -22,13 +22,10 @@ const SamplX = () => {
   const sourceNodesRef = useRef([]);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const recordedChunksRef = useRef([]);
-  const destinationRef = useRef(null);
   const audioBuffersRef = useRef({});
   const flangerNodesRef = useRef({});
-  const streamRef = useRef(null);
-  const recordingBufferRef = useRef(null);
+  const recordingEventsRef = useRef([]); // Track played slices during recording
+  const recordingStartTimeRef = useRef(null);
 
   useEffect(() => {
     audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -433,19 +430,9 @@ const SamplX = () => {
       dryGain.connect(merger);
       wetGain.connect(merger);
       
-      // Connect to recording if active, otherwise to speakers
-      if (isRecording && recordingBufferRef.current) {
-        merger.connect(recordingBufferRef.current.gainNode);
-      } else {
-        merger.connect(audioContextRef.current.destination);
-      }
+      merger.connect(audioContextRef.current.destination);
     } else {
-      // Connect to recording if active, otherwise to speakers
-      if (isRecording && recordingBufferRef.current) {
-        chain.connect(recordingBufferRef.current.gainNode);
-      } else {
-        chain.connect(audioContextRef.current.destination);
-      }
+      chain.connect(audioContextRef.current.destination);
     }
 
     source.start();
@@ -455,6 +442,27 @@ const SamplX = () => {
 
     setActiveSlice(idx);
     sourceNodesRef.current.push(source);
+    
+    // Record this slice event if recording is active
+    if (isRecording) {
+      const currentTime = audioContextRef.current.currentTime;
+      const relativeTime = currentTime - recordingStartTimeRef.current;
+      
+      // Calculate duration considering tempo and transpose
+      const baseDuration = audioBuffersRef.current[idx].duration;
+      const actualDuration = baseDuration / source.playbackRate.value;
+      
+      const recordingEvent = {
+        sliceIndex: idx,
+        timestamp: relativeTime,
+        duration: actualDuration,
+        settings: { ...settings },
+        buffer: audioBuffersRef.current[idx]
+      };
+      
+      recordingEventsRef.current.push(recordingEvent);
+      console.log('📝 Recorded slice event:', recordingEvent);
+    }
   };
 
   const createReverbBuffer = (duration, sampleRate) => {
@@ -646,107 +654,166 @@ const SamplX = () => {
     return new Blob([arrayBuffer], { type: 'audio/wav' });
   };
 
-  const startRecording = async () => {
-    try {
-      // Create a MediaStreamDestination to capture live audio
-      const destination = audioContextRef.current.createMediaStreamDestination();
-      
-      // Create a gain node for the recording
-      const recordingGain = audioContextRef.current.createGain();
-      recordingGain.connect(destination);
-      recordingGain.connect(audioContextRef.current.destination); // Also play through speakers
-      
-      // Set up MediaRecorder to capture the stream
-      const mediaRecorder = new MediaRecorder(destination.stream);
-      mediaRecorderRef.current = mediaRecorder;
-      recordedChunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          recordedChunksRef.current.push(e.data);
-        }
-      };
-      
-      mediaRecorder.start(100); // Capture in 100ms chunks for better quality
-      
-      // Store the recording setup
-      recordingBufferRef.current = {
-        destination: destination,
-        gainNode: recordingGain,
-        startTime: audioContextRef.current.currentTime
-      };
-      
-      setIsRecording(true);
-      console.log('🎙️ Recording started - play your samples now!');
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      alert('Failed to start recording: ' + error.message);
-    }
+  const startRecording = () => {
+    // Clear previous recording events
+    recordingEventsRef.current = [];
+    recordingStartTimeRef.current = audioContextRef.current.currentTime;
+    
+    setIsRecording(true);
+    console.log('🎙️ Recording started - play your samples now!');
+    console.log('Recording will track when you play slices and render them to MP3.');
   };
 
   const stopRecording = async () => {
-    if (!isRecording || !mediaRecorderRef.current) return;
+    if (!isRecording) return;
+    
+    setIsRecording(false);
     
     try {
-      setIsRecording(false);
       console.log('🔄 Processing recording...');
+      console.log('Recorded events:', recordingEventsRef.current);
       
-      // Stop the MediaRecorder
-      if (mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-      
-      // Wait a bit for the last chunks
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Create blob from recorded chunks
-      const webmBlob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
-      
-      console.log('Recorded blob size:', webmBlob.size, 'bytes');
-      
-      if (webmBlob.size === 0) {
-        alert('No audio was captured. Make sure to play some samples while recording!');
-        if (recordingBufferRef.current) {
-          recordingBufferRef.current.gainNode.disconnect();
-          recordingBufferRef.current = null;
-        }
+      if (recordingEventsRef.current.length === 0) {
+        alert('No slices were played during recording. Play some samples while recording!');
         return;
       }
       
-      // Convert WebM to WAV for better compatibility
-      try {
-        const arrayBuffer = await webmBlob.arrayBuffer();
-        const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-        
-        // Convert to WAV
-        const wavBlob = await audioBufferToWav(audioBuffer);
-        setRecordedAudio(wavBlob);
-        
-        console.log('✅ Recording complete! Click "Download Recording" to save.');
-      } catch (decodeError) {
-        // If decoding fails, just save the webm
-        console.warn('Could not decode to WAV, saving as WebM:', decodeError);
-        setRecordedAudio(webmBlob);
-        console.log('✅ Recording complete (WebM format)! Click "Download Recording" to save.');
+      // Calculate total duration needed
+      const maxEndTime = Math.max(...recordingEventsRef.current.map(event => event.timestamp + event.duration));
+      const totalDuration = maxEndTime + 1; // Add 1 second padding
+      
+      console.log('Rendering', recordingEventsRef.current.length, 'events over', totalDuration.toFixed(2), 'seconds');
+      
+      // Create offline audio context for rendering
+      const sampleRate = audioContextRef.current.sampleRate;
+      const offlineContext = new OfflineAudioContext(2, totalDuration * sampleRate, sampleRate);
+      
+      // Render each recorded event
+      for (const event of recordingEventsRef.current) {
+        await renderSliceEvent(offlineContext, event);
       }
       
-      // Clean up
-      if (recordingBufferRef.current) {
-        recordingBufferRef.current.gainNode.disconnect();
-        recordingBufferRef.current = null;
-      }
+      console.log('🎵 Rendering audio...');
+      const renderedBuffer = await offlineContext.startRendering();
+      
+      console.log('📦 Converting to MP3...');
+      const mp3Blob = await audioBufferToMp3(renderedBuffer);
+      
+      setRecordedAudio(mp3Blob);
+      console.log('✅ Recording complete! Click "Download Recording" to save as MP3.');
       
     } catch (error) {
-      console.error('Error stopping recording:', error);
-      
-      // Clean up
-      if (recordingBufferRef.current) {
-        recordingBufferRef.current.gainNode.disconnect();
-        recordingBufferRef.current = null;
-      }
-      
+      console.error('Error processing recording:', error);
       alert('Error processing recording: ' + error.message);
     }
+  };
+
+  // Render a single slice event to the offline context
+  const renderSliceEvent = async (offlineContext, event) => {
+    const source = offlineContext.createBufferSource();
+    source.buffer = event.buffer;
+    
+    const gainNode = offlineContext.createGain();
+    gainNode.gain.value = event.settings.volume !== undefined ? event.settings.volume : 1;
+    
+    const filterNode = offlineContext.createBiquadFilter();
+    filterNode.type = 'lowpass';
+    filterNode.frequency.value = event.settings.filter || 10000;
+    
+    source.playbackRate.value = (event.settings.tempo || 1) * Math.pow(2, (event.settings.transpose || 0) / 12);
+    
+    let chain = source;
+    chain.connect(filterNode);
+    chain = filterNode;
+    
+    if (event.settings.flanger && event.settings.flanger > 0) {
+      const delay = offlineContext.createDelay(0.1);
+      const lfo = offlineContext.createOscillator();
+      const lfoGain = offlineContext.createGain();
+      
+      lfo.frequency.value = 0.5;
+      lfoGain.gain.value = 0.005 * event.settings.flanger;
+      
+      lfo.connect(lfoGain);
+      lfoGain.connect(delay.delayTime);
+      
+      chain.connect(delay);
+      delay.connect(gainNode);
+      chain = gainNode;
+    } else {
+      chain.connect(gainNode);
+      chain = gainNode;
+    }
+    
+    if (event.settings.reverb && event.settings.reverb > 0) {
+      const convolver = offlineContext.createConvolver();
+      const reverbBuffer = createReverbBuffer(2, offlineContext.sampleRate);
+      convolver.buffer = reverbBuffer;
+      
+      const dryGain = offlineContext.createGain();
+      const wetGain = offlineContext.createGain();
+      
+      dryGain.gain.value = 1 - event.settings.reverb;
+      wetGain.gain.value = event.settings.reverb;
+      
+      chain.connect(dryGain);
+      chain.connect(convolver);
+      convolver.connect(wetGain);
+      
+      const merger = offlineContext.createChannelMerger(2);
+      dryGain.connect(merger);
+      wetGain.connect(merger);
+      merger.connect(offlineContext.destination);
+    } else {
+      chain.connect(offlineContext.destination);
+    }
+    
+    source.start(event.timestamp);
+  };
+  
+  // Convert AudioBuffer to MP3
+  const audioBufferToMp3 = async (audioBuffer) => {
+    const numberOfChannels = audioBuffer.numberOfChannels;
+    const length = audioBuffer.length;
+    const sampleRate = audioBuffer.sampleRate;
+    
+    // Initialize MP3 encoder
+    const mp3encoder = new lamejs.Mp3Encoder(numberOfChannels, sampleRate, 128);
+    const mp3Data = [];
+    
+    // Convert float32 to int16
+    const leftChannel = audioBuffer.getChannelData(0);
+    const rightChannel = numberOfChannels > 1 ? audioBuffer.getChannelData(1) : leftChannel;
+    
+    const leftInt16 = new Int16Array(leftChannel.length);
+    const rightInt16 = new Int16Array(rightChannel.length);
+    
+    for (let i = 0; i < leftChannel.length; i++) {
+      leftInt16[i] = Math.max(-32768, Math.min(32767, leftChannel[i] * 32768));
+      rightInt16[i] = Math.max(-32768, Math.min(32767, rightChannel[i] * 32768));
+    }
+    
+    // Encode in chunks
+    const chunkSize = 1152;
+    for (let i = 0; i < leftInt16.length; i += chunkSize) {
+      const leftChunk = leftInt16.subarray(i, i + chunkSize);
+      const rightChunk = rightInt16.subarray(i, i + chunkSize);
+      
+      const mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
+      if (mp3buf.length > 0) {
+        mp3Data.push(mp3buf);
+      }
+    }
+    
+    // Flush remaining data
+    const mp3buf = mp3encoder.flush();
+    if (mp3buf.length > 0) {
+      mp3Data.push(mp3buf);
+    }
+    
+    // Create blob
+    const blob = new Blob(mp3Data, { type: 'audio/mp3' });
+    return blob;
   };
 
   const downloadRecording = () => {
@@ -760,7 +827,8 @@ const SamplX = () => {
     a.href = url;
     
     // Determine file extension based on blob type
-    const extension = recordedAudio.type.includes('wav') ? 'wav' : 'webm';
+    const extension = recordedAudio.type.includes('mp3') ? 'mp3' : 
+                     recordedAudio.type.includes('wav') ? 'wav' : 'webm';
     a.download = `samplx-recording-${Date.now()}.${extension}`;
     
     document.body.appendChild(a);
