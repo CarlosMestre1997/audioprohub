@@ -94,7 +94,12 @@ window.downloadTracker = {
                 body: JSON.stringify({ userId: userId })
             });
             const data = await response.json();
-            console.log('Track download response:', data);
+            console.log('✅ Track download response:', data);
+            
+            // Update UI with new download count
+            if (data.success) {
+                this.updateUsageStatus(data);
+            }
             
             // Show subscription modal if download limit is reached
             if (!data.success && data.message && data.message.includes('limit reached')) {

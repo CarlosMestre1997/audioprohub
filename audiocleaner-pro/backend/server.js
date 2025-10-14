@@ -471,9 +471,41 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Serve index.html for all other routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'index.html'));
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    service: 'audiocleaner-backend',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API info endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    service: 'AudioCleaner Pro Backend API',
+    version: '1.0.0',
+    endpoints: {
+      'GET /test': 'Test endpoint with download stats',
+      'GET /api/debug-user': 'Debug user download status',
+      'POST /api/check-download': 'Check download permission',
+      'POST /api/track-download': 'Track a download',
+      'POST /api/create-checkout-session': 'Create Stripe checkout',
+      'POST /api/auth/login-email': 'Email-based login',
+      'GET /admin': 'Admin dashboard'
+    },
+    note: 'This is the backend API. Frontend is hosted on GitHub Pages.'
+  });
+});
+
+// Serve index.html only for root route (not API routes)
+app.get('/', (req, res) => {
+  res.json({
+    message: 'AudioCleaner Pro Backend API',
+    frontend: 'https://carlosmestre1997.github.io/audioprohub/audiocleaner-pro.html',
+    api_docs: '/api',
+    admin: '/admin'
+  });
 });
 
 app.listen(PORT, () => {
