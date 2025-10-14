@@ -16,6 +16,7 @@ const SamplX = () => {
   const [downloadsRemaining, setDownloadsRemaining] = useState(3);
   const [isPremium, setIsPremium] = useState(false);
   const [userEmail, setUserEmail] = useState(null);
+  const [recordedAudio, setRecordedAudio] = useState(null);
   
   const audioContextRef = useRef(null);
   const sourceNodesRef = useRef([]);
@@ -676,12 +677,11 @@ const SamplX = () => {
 
       mediaRecorderRef.current.onstop = async () => {
         const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
-        const arrayBuffer = await blob.arrayBuffer();
-        const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer);
-        setAudioBuffer(decoded);
-        setSlices([]);
-        setSliceSettings({});
-        audioBuffersRef.current = {};
+        
+        // Save the recording for download
+        setRecordedAudio(blob);
+        
+        console.log('✅ Recording saved! You can now download it.');
 
         // Clean up recording nodes
         if (recordingBufferRef.current) {
@@ -705,6 +705,24 @@ const SamplX = () => {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
+  };
+
+  const downloadRecording = () => {
+    if (!recordedAudio) {
+      alert('No recording available to download');
+      return;
+    }
+
+    const url = URL.createObjectURL(recordedAudio);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `samplx-recording-${Date.now()}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    console.log('📥 Recording downloaded!');
   };
 
   const updateSliceSetting = (idx, key, value) => {
@@ -952,6 +970,14 @@ const SamplX = () => {
                 className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded flex items-center gap-2 transition animate-pulse"
               >
                 <MicOff size={16} /> Stop Recording
+              </button>
+            )}
+            {recordedAudio && (
+              <button
+                onClick={downloadRecording}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded flex items-center gap-2 transition"
+              >
+                <Download size={16} /> Download Recording
               </button>
             )}
             <button

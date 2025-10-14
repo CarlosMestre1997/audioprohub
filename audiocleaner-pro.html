@@ -136,9 +136,9 @@
         }
         
         .upload-zone {
-            border: 3px dashed #00ff88;
+            border: 2px dashed #00ff88;
             border-radius: 0;
-            padding: 3rem;
+            padding: 2rem;
             text-align: center;
             margin: 2rem 0;
             background: rgba(0, 255, 136, 0.05);
@@ -152,9 +152,14 @@
             transform: scale(1.02);
         }
         
-        .upload-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
+        .upload-zone h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.1rem;
+        }
+        
+        .upload-zone p {
+            margin: 0;
+            font-size: 0.9rem;
         }
         
         .controls-panel {
@@ -377,7 +382,6 @@
         </div>
         
         <div class="upload-zone" id="uploadZone">
-            <div class="upload-icon">🎵</div>
             <h3>Drop your audio file here or click to select</h3>
             <p>Supports MP3, WAV, OGG, M4A</p>
             <input type="file" id="audioFile" accept="audio/*" style="display: none;">
@@ -750,9 +754,15 @@
                             filterNodes.gain.gain.value = parseFloat(value) / 100;
                         }
                         if (sliderId === 'noiseReduction' && filterNodes.highpass) {
-                            // Higher noise reduction = higher highpass frequency
-                            const freq = 80 + (parseFloat(value) * 2);
-                            filterNodes.highpass.frequency.value = freq;
+                            // Improved noise reduction with noticeable effect
+                            const noiseIntensity = parseFloat(value) / 100;
+                            filterNodes.highpass.frequency.value = 60 + (noiseIntensity * 180);
+                            
+                            // Update hiss reduction if it exists
+                            if (filterNodes.hissReduction) {
+                                filterNodes.hissReduction.frequency.value = 6000 - (noiseIntensity * 2000);
+                                filterNodes.hissReduction.gain.value = -(noiseIntensity * 18);
+                            }
                         }
                     }
                     
@@ -840,10 +850,40 @@
                 lowpass.frequency.value = parseInt(freqCut);
                 lowpass.Q.value = 1;
                 
-                const highpass = offlineContext.createBiquadFilter();
-                highpass.type = 'highpass';
-                highpass.frequency.value = 80 + (parseFloat(noiseReduction) * 2);
-                highpass.Q.value = 0.7;
+                // Improved noise reduction with multiple stages
+                const noiseIntensity = parseFloat(noiseReduction) / 100;
+                
+                // Stage 1: Aggressive highpass to remove low-frequency rumble
+                const highpass1 = offlineContext.createBiquadFilter();
+                highpass1.type = 'highpass';
+                highpass1.frequency.value = 60 + (noiseIntensity * 180); // 60Hz to 240Hz
+                highpass1.Q.value = 0.7;
+                
+                // Stage 2: Remove hiss using aggressive high-shelf
+                const hissReduction = offlineContext.createBiquadFilter();
+                hissReduction.type = 'highshelf';
+                hissReduction.frequency.value = 6000 - (noiseIntensity * 2000); // 6000Hz to 4000Hz
+                hissReduction.gain.value = -(noiseIntensity * 18); // Up to -18dB reduction
+                
+                // Stage 3: Notch filter for typical AC hum (50/60Hz harmonics)
+                const notch120 = offlineContext.createBiquadFilter();
+                notch120.type = 'notch';
+                notch120.frequency.value = 120;
+                notch120.Q.value = 10 * noiseIntensity;
+                
+                // Stage 4: Dynamic range compression to reduce noise floor
+                const compressor = offlineContext.createDynamicsCompressor();
+                compressor.threshold.value = -40 + (noiseIntensity * 15); // More aggressive with higher intensity
+                compressor.knee.value = 10;
+                compressor.ratio.value = 4 + (noiseIntensity * 8); // Up to 12:1 ratio
+                compressor.attack.value = 0.003;
+                compressor.release.value = 0.25;
+                
+                // Stage 5: Gate to cut very quiet sounds (noise)
+                const gate = offlineContext.createGain();
+                // This is a simple gate - reduce gain for quieter signals
+                // In a real implementation, you'd analyze the signal level
+                gate.gain.value = 1 - (noiseIntensity * 0.3);
                 
                 const clarityFilter = offlineContext.createBiquadFilter();
                 clarityFilter.type = 'peaking';
@@ -861,8 +901,12 @@
                 gainNode.gain.value = volume;
                 
                 source
-                    .connect(highpass)
+                    .connect(highpass1)
+                    .connect(notch120)
+                    .connect(hissReduction)
                     .connect(lowpass)
+                    .connect(compressor)
+                    .connect(gate)
                     .connect(clarityFilter)
                     .connect(vocalFilter)
                     .connect(gainNode)
