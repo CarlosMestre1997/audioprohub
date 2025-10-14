@@ -449,6 +449,10 @@ async function initiateUpgrade(plan) {
     setTimeout(() => {
         showNotification('Upgrade successful! Welcome to Premium!', 'success');
         currentUser.subscription = 'premium';
+        
+        // Save updated user data to localStorage so services can access it
+        localStorage.setItem('audioHub_user', JSON.stringify(currentUser));
+        
         updateUIForLoggedInUser(currentUser);
         
         // Close modal

@@ -162,6 +162,12 @@ app.post('/api/create-checkout-session', async (req, res) => {
     const { priceId, plan } = req.body;
     const userId = req.cookies.userId || Math.random().toString(36).substring(2);
     
+    console.log('=== STRIPE CHECKOUT REQUEST ===');
+    console.log('Request body:', req.body);
+    console.log('Price ID:', priceId);
+    console.log('Plan:', plan);
+    console.log('User ID:', userId);
+    console.log('Stripe Secret Key exists:', !!process.env.STRIPE_SECRET_KEY);
     console.log(`Creating checkout session for user ${userId}, plan: ${plan}`);
     
     const session = await stripe.checkout.sessions.create({
@@ -171,14 +177,18 @@ app.post('/api/create-checkout-session', async (req, res) => {
         price: priceId,
         quantity: 1,
       }],
-      success_url: `${req.protocol}://${req.get('host')}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.protocol}://${req.get('host')}/cancel`,
+      success_url: `https://carlosmestre1997.github.io/audioprohub/?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `https://carlosmestre1997.github.io/audioprohub/?payment=cancelled`,
       client_reference_id: userId, // Link payment to your user
       metadata: {
         userId: userId,
         plan: plan
       }
     });
+    
+    console.log('✅ Stripe session created successfully');
+    console.log('Session ID:', session.id);
+    console.log('Checkout URL:', session.url);
     
     res.json({ 
       sessionId: session.id,

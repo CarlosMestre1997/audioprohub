@@ -775,13 +775,18 @@ const SamplX = () => {
   
   const initiateSubscription = async (plan) => {
     try {
+      console.log('=== SAMPLX STRIPE SUBSCRIPTION ===');
+      console.log('Plan:', plan);
+      
       // Use AudioCleaner backend for Stripe checkout
       const API_BASE = 'https://audiocleaner.onrender.com';
       const priceMap = {
         monthly: 'price_1SAdUnFZ7vA4ogcaqoy0uJoM',
-        yearly: 'price_1SAdVwFZ7vA4ogcaayfar2S8Q'
+        yearly: 'price_1SAdVwFZ7vA4ogcayfar2S8Q'
       };
       const priceId = priceMap[plan];
+      console.log('Price ID:', priceId);
+      
       if (!priceId) throw new Error('Unknown plan');
       
       const response = await fetch(`${API_BASE}/api/create-checkout-session`, {
@@ -796,10 +801,23 @@ const SamplX = () => {
         })
       });
       
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
+      console.log('✅ SamplX Stripe response:', data);
+      
       if (data.url) {
+        console.log('✅ Redirecting to Stripe checkout:', data.url);
         window.location.href = data.url;
       } else {
+        console.error('❌ No checkout URL in response');
         alert('Error creating checkout session. Please try again.');
       }
     } catch (error) {

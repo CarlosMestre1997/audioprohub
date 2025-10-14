@@ -260,27 +260,53 @@ window.downloadTracker = {
 
 	async initiateSubscription(plan) {
         try {
+			console.log('=== INITIATING STRIPE SUBSCRIPTION ===');
+			console.log('Plan:', plan);
+			console.log('API_BASE:', API_BASE);
+			
 			// Map your Stripe test Price IDs here
 			const priceMap = {
 				monthly: 'price_1SAdUnFZ7vA4ogcaqoy0uJoM',
 				yearly: 'price_1SAdVwFZ7vA4ogcayfar2S8Q'
 			};
 			const priceId = priceMap[plan];
+			console.log('Price ID:', priceId);
+			
 			if (!priceId) throw new Error('Unknown plan');
+			
+			const requestBody = {
+				priceId: priceId,
+				plan: plan
+			};
+			console.log('Request body:', requestBody);
+			
             const response = await fetch(`${API_BASE}/api/create-checkout-session`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 credentials: 'include',
-                body: JSON.stringify({
-					priceId: priceId,
-					plan: plan
-                })
+                body: JSON.stringify(requestBody)
             });
+            
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
+            console.log('✅ Stripe response:', data);
+            
             if (data.url) {
+                console.log('✅ Redirecting to Stripe checkout:', data.url);
                 window.location.href = data.url;
+            } else {
+                console.error('❌ No checkout URL in response');
+                throw new Error('No checkout URL received from server');
             }
         } catch (error) {
             console.error('Error initiating subscription:', error);
