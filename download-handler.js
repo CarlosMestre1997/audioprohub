@@ -4,15 +4,48 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
     ? '' // Use relative URLs for local development
     : 'https://audiocleaner.onrender.com'; // Use Render backend for production
 
+// Generate or retrieve a stable user ID
+function getUserId() {
+    // First check for authenticated user email
+    const userEmail = localStorage.getItem('audioHub_userEmail');
+    if (userEmail) {
+        return 'email_' + btoa(userEmail); // Use email as base for userId
+    }
+    
+    // Otherwise use a persistent browser fingerprint
+    let userId = localStorage.getItem('audiocleaner_userId');
+    if (!userId) {
+        // Create a stable fingerprint from browser characteristics
+        const fingerprint = [
+            navigator.userAgent,
+            navigator.language,
+            screen.width,
+            screen.height,
+            new Date().getTimezoneOffset()
+        ].join('|');
+        
+        // Generate a hash-like ID from the fingerprint
+        userId = 'anon_' + btoa(fingerprint).substring(0, 16).replace(/[^a-zA-Z0-9]/g, '');
+        localStorage.setItem('audiocleaner_userId', userId);
+    }
+    return userId;
+}
+
 window.downloadTracker = {
     async checkDownloadPermission() {
         try {
             console.log('Checking download permission...');
+            const userId = getUserId();
+            console.log('Using userId:', userId);
+            
             const response = await fetch(`${API_BASE}/api/check-download`, {
+                method: 'POST',
                 credentials: 'include',
                 headers: {
-                    'Accept': 'application/json'
-                }
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ userId: userId })
             });
             
             if (!response.ok) {
@@ -30,12 +63,16 @@ window.downloadTracker = {
 
     async trackDownload() {
         try {
+            const userId = getUserId();
+            console.log('Tracking download for userId:', userId);
+            
             const response = await fetch(`${API_BASE}/api/track-download`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify({ userId: userId })
             });
             const data = await response.json();
             console.log('Track download response:', data);
