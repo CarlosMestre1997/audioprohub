@@ -441,16 +441,21 @@ const SamplX = () => {
 
     if (slices.length === 0) return;
 
-    for (let i = 0; i < slices.length; i++) {
-      await exportSlice(i);
-    }
-
-    // Increment download count for free users
+    // Increment download count BEFORE exporting (only once per button click)
     if (!isPremium) {
       const newCount = downloadCount + 1;
       setDownloadCount(newCount);
       setDownloadsRemaining(Math.max(0, 3 - newCount));
       localStorage.setItem('samplx_downloads', newCount.toString());
+    }
+
+    // Export all slices sequentially with a small delay between each
+    for (let i = 0; i < slices.length; i++) {
+      await exportSlice(i);
+      // Small delay to prevent browser blocking multiple downloads
+      if (i < slices.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
   };
 
@@ -562,7 +567,48 @@ const SamplX = () => {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let stream;
+      
+      // Try to get screen/tab audio first (Chrome only)
+      if (navigator.mediaDevices.getDisplayMedia) {
+        const choice = confirm(
+          'Choose recording source:\n\n' +
+          'OK = Screen/Tab Audio (system audio, Chrome only)\n' +
+          'Cancel = Microphone Input'
+        );
+        
+        if (choice) {
+          try {
+            // Request screen share with audio
+            stream = await navigator.mediaDevices.getDisplayMedia({
+              video: true,
+              audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+              }
+            });
+            
+            // We only want audio, so stop video tracks
+            stream.getVideoTracks().forEach(track => track.stop());
+            
+            // Check if audio track exists
+            if (stream.getAudioTracks().length === 0) {
+              throw new Error('No audio track in screen share. Make sure to check "Share audio" when selecting a tab.');
+            }
+          } catch (displayError) {
+            console.error('Screen audio capture failed:', displayError);
+            alert('Screen audio capture failed. Make sure to:\n1. Select a browser tab\n2. Check "Share audio"\n\nFalling back to microphone...');
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          }
+        } else {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+      } else {
+        // Fallback for browsers that don't support getDisplayMedia
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      
       streamRef.current = stream;
       
       mediaRecorderRef.current = new MediaRecorder(stream);
@@ -593,7 +639,7 @@ const SamplX = () => {
       setIsRecording(true);
     } catch (error) {
       console.error('Error starting recording:', error);
-      alert('Failed to start recording. Please allow microphone access.');
+      alert('Failed to start recording. Please allow audio access.');
     }
   };
 

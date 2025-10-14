@@ -1,9 +1,14 @@
 // Download tracking and handling
+// API Configuration - points to Render backend
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? '' // Use relative URLs for local development
+    : 'https://audiocleaner.onrender.com'; // Use Render backend for production
+
 window.downloadTracker = {
     async checkDownloadPermission() {
         try {
             console.log('Checking download permission...');
-            const response = await fetch('/api/check-download', {
+            const response = await fetch(`${API_BASE}/api/check-download`, {
                 credentials: 'include',
                 headers: {
                     'Accept': 'application/json'
@@ -25,7 +30,7 @@ window.downloadTracker = {
 
     async trackDownload() {
         try {
-            const response = await fetch('/api/track-download', {
+            const response = await fetch(`${API_BASE}/api/track-download`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
@@ -156,7 +161,7 @@ window.downloadTracker = {
 			};
 			const priceId = priceMap[plan];
 			if (!priceId) throw new Error('Unknown plan');
-            const response = await fetch('/api/create-checkout-session', {
+            const response = await fetch(`${API_BASE}/api/create-checkout-session`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -214,7 +219,7 @@ window.downloadTracker = {
 		btn.onclick = async () => {
 			msg.textContent = 'Verifying...';
 			try {
-				const resp = await fetch('/api/auth/login-email', {
+				const resp = await fetch(`${API_BASE}/api/auth/login-email`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					credentials: 'include',
