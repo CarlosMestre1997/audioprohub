@@ -408,15 +408,27 @@
             </div>
             
             <div class="control-group">
-                <h3>Enhancement</h3>
+                <h3>Equalizer</h3>
                 <div class="preview-label">Live Preview</div>
                 <div class="slider-container">
-                    <label>Clarity Boost: <span id="clarityValue">30</span>%</label>
-                    <input type="range" class="slider" id="clarity" min="0" max="100" value="30">
+                    <label>Low (100Hz): <span id="eqLowValue">0</span>dB</label>
+                    <input type="range" class="slider" id="eqLow" min="-12" max="12" value="0">
                 </div>
                 <div class="slider-container">
-                    <label>Vocal Enhance: <span id="vocalValue">25</span>%</label>
-                    <input type="range" class="slider" id="vocal" min="0" max="100" value="25">
+                    <label>Mid-Low (400Hz): <span id="eqMidLowValue">0</span>dB</label>
+                    <input type="range" class="slider" id="eqMidLow" min="-12" max="12" value="0">
+                </div>
+                <div class="slider-container">
+                    <label>Mid (1kHz): <span id="eqMidValue">0</span>dB</label>
+                    <input type="range" class="slider" id="eqMid" min="-12" max="12" value="0">
+                </div>
+                <div class="slider-container">
+                    <label>Mid-High (3kHz): <span id="eqMidHighValue">0</span>dB</label>
+                    <input type="range" class="slider" id="eqMidHigh" min="-12" max="12" value="0">
+                </div>
+                <div class="slider-container">
+                    <label>High (8kHz): <span id="eqHighValue">0</span>dB</label>
+                    <input type="range" class="slider" id="eqHigh" min="-12" max="12" value="0">
                 </div>
             </div>
             
@@ -638,6 +650,37 @@
             filterNodes.highpass.type = 'highpass';
             filterNodes.highpass.frequency.value = 80;
             
+            // Create EQ filters
+            filterNodes.eqLow = audioContext.createBiquadFilter();
+            filterNodes.eqLow.type = 'peaking';
+            filterNodes.eqLow.frequency.value = 100;
+            filterNodes.eqLow.Q.value = 1;
+            filterNodes.eqLow.gain.value = 0;
+            
+            filterNodes.eqMidLow = audioContext.createBiquadFilter();
+            filterNodes.eqMidLow.type = 'peaking';
+            filterNodes.eqMidLow.frequency.value = 400;
+            filterNodes.eqMidLow.Q.value = 1;
+            filterNodes.eqMidLow.gain.value = 0;
+            
+            filterNodes.eqMid = audioContext.createBiquadFilter();
+            filterNodes.eqMid.type = 'peaking';
+            filterNodes.eqMid.frequency.value = 1000;
+            filterNodes.eqMid.Q.value = 1;
+            filterNodes.eqMid.gain.value = 0;
+            
+            filterNodes.eqMidHigh = audioContext.createBiquadFilter();
+            filterNodes.eqMidHigh.type = 'peaking';
+            filterNodes.eqMidHigh.frequency.value = 3000;
+            filterNodes.eqMidHigh.Q.value = 1;
+            filterNodes.eqMidHigh.gain.value = 0;
+            
+            filterNodes.eqHigh = audioContext.createBiquadFilter();
+            filterNodes.eqHigh.type = 'peaking';
+            filterNodes.eqHigh.frequency.value = 8000;
+            filterNodes.eqHigh.Q.value = 1;
+            filterNodes.eqHigh.gain.value = 0;
+            
             filterNodes.gain = audioContext.createGain();
             filterNodes.gain.gain.value = 1.0;
         }
@@ -656,10 +699,15 @@
             currentPlaybackSource = audioContext.createBufferSource();
             currentPlaybackSource.buffer = audioBuffer;
             
-            // Connect audio chain
+            // Connect audio chain with EQ
             currentPlaybackSource
                 .connect(filterNodes.highpass)
                 .connect(filterNodes.lowpass)
+                .connect(filterNodes.eqLow)
+                .connect(filterNodes.eqMidLow)
+                .connect(filterNodes.eqMid)
+                .connect(filterNodes.eqMidHigh)
+                .connect(filterNodes.eqHigh)
                 .connect(filterNodes.gain)
                 .connect(analyser)
                 .connect(audioContext.destination);
@@ -724,9 +772,12 @@
         function setupControls() {
             const sliders = {
                 noiseReduction: 'noiseValue',
-                freqCut: 'freqValue', 
-                clarity: 'clarityValue',
-                vocal: 'vocalValue',
+                freqCut: 'freqValue',
+                eqLow: 'eqLowValue',
+                eqMidLow: 'eqMidLowValue',
+                eqMid: 'eqMidValue',
+                eqMidHigh: 'eqMidHighValue',
+                eqHigh: 'eqHighValue',
                 volume: 'volumeValue'
             };
             
@@ -737,12 +788,19 @@
                 slider.addEventListener('input', () => {
                     let value = slider.value;
                     
-                    // Update display
+                    // Update display and apply effects
                     if (sliderId === 'freqCut') {
                         valueDisplay.textContent = value + 'Hz';
                         // Apply lowpass filter
                         if (filterNodes.lowpass) {
                             filterNodes.lowpass.frequency.value = parseInt(value);
+                        }
+                    } else if (sliderId.startsWith('eq')) {
+                        valueDisplay.textContent = value + 'dB';
+                        // Apply EQ filter based on which band
+                        const eqBand = sliderId.replace('eq', '');
+                        if (filterNodes[`eq${eqBand}`]) {
+                            filterNodes[`eq${eqBand}`].gain.value = parseFloat(value);
                         }
                     } else {
                         valueDisplay.textContent = value + '%';
@@ -832,27 +890,49 @@
                 // Get filter values
                 const noiseReduction = document.getElementById('noiseReduction').value;
                 const freqCut = document.getElementById('freqCut').value;
-                const clarity = document.getElementById('clarity').value;
-                const vocal = document.getElementById('vocal').value;
+                const eqLow = document.getElementById('eqLow').value;
+                const eqMidLow = document.getElementById('eqMidLow').value;
+                const eqMid = document.getElementById('eqMid').value;
+                const eqMidHigh = document.getElementById('eqMidHigh').value;
+                const eqHigh = document.getElementById('eqHigh').value;
                 const volume = document.getElementById('volume').value / 100;
                 
-                // Apply simple, working filters
+                // Create identical filter chain as preview
                 const lowpass = offlineContext.createBiquadFilter();
                 lowpass.type = 'lowpass';
                 lowpass.frequency.value = parseInt(freqCut);
                 lowpass.Q.value = 1;
                 
-                const clarityFilter = offlineContext.createBiquadFilter();
-                clarityFilter.type = 'peaking';
-                clarityFilter.frequency.value = 3000;
-                clarityFilter.Q.value = 1;
-                clarityFilter.gain.value = parseFloat(clarity) * 0.3;
+                // Create EQ filters (same as preview)
+                const eqLowFilter = offlineContext.createBiquadFilter();
+                eqLowFilter.type = 'peaking';
+                eqLowFilter.frequency.value = 100;
+                eqLowFilter.Q.value = 1;
+                eqLowFilter.gain.value = parseFloat(eqLow);
                 
-                const vocalFilter = offlineContext.createBiquadFilter();
-                vocalFilter.type = 'peaking';
-                vocalFilter.frequency.value = 1000;
-                vocalFilter.Q.value = 2;
-                vocalFilter.gain.value = parseFloat(vocal) * 0.25;
+                const eqMidLowFilter = offlineContext.createBiquadFilter();
+                eqMidLowFilter.type = 'peaking';
+                eqMidLowFilter.frequency.value = 400;
+                eqMidLowFilter.Q.value = 1;
+                eqMidLowFilter.gain.value = parseFloat(eqMidLow);
+                
+                const eqMidFilter = offlineContext.createBiquadFilter();
+                eqMidFilter.type = 'peaking';
+                eqMidFilter.frequency.value = 1000;
+                eqMidFilter.Q.value = 1;
+                eqMidFilter.gain.value = parseFloat(eqMid);
+                
+                const eqMidHighFilter = offlineContext.createBiquadFilter();
+                eqMidHighFilter.type = 'peaking';
+                eqMidHighFilter.frequency.value = 3000;
+                eqMidHighFilter.Q.value = 1;
+                eqMidHighFilter.gain.value = parseFloat(eqMidHigh);
+                
+                const eqHighFilter = offlineContext.createBiquadFilter();
+                eqHighFilter.type = 'peaking';
+                eqHighFilter.frequency.value = 8000;
+                eqHighFilter.Q.value = 1;
+                eqHighFilter.gain.value = parseFloat(eqHigh);
                 
                 const gainNode = offlineContext.createGain();
                 gainNode.gain.value = volume;
@@ -864,11 +944,15 @@
                 highpass.frequency.value = 60 + (noiseIntensity * 180);
                 highpass.Q.value = 0.7;
                 
+                // Connect identical chain as preview
                 source
                     .connect(highpass)
                     .connect(lowpass)
-                    .connect(clarityFilter)
-                    .connect(vocalFilter)
+                    .connect(eqLowFilter)
+                    .connect(eqMidLowFilter)
+                    .connect(eqMidFilter)
+                    .connect(eqMidHighFilter)
+                    .connect(eqHighFilter)
                     .connect(gainNode)
                     .connect(offlineContext.destination);
                 
