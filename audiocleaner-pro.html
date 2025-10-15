@@ -629,7 +629,7 @@
         
         // Setup audio processing chain with filters
         function setupAudioChain() {
-            // Create filter nodes
+            // Create simple filter nodes
             filterNodes.lowpass = audioContext.createBiquadFilter();
             filterNodes.lowpass.type = 'lowpass';
             filterNodes.lowpass.frequency.value = 8000;
@@ -640,8 +640,6 @@
             
             filterNodes.gain = audioContext.createGain();
             filterNodes.gain.gain.value = 1.0;
-            
-            // Connect nodes: source -> filters -> gain -> analyser -> destination
         }
         
         // Play 5-second audio preview
@@ -754,23 +752,9 @@
                             filterNodes.gain.gain.value = parseFloat(value) / 100;
                         }
                         if (sliderId === 'noiseReduction' && filterNodes.highpass) {
-                            // Moderate noise reduction for noticeable but clean effect
+                            // Simple noise reduction
                             const noiseIntensity = parseFloat(value) / 100;
-                            filterNodes.highpass.frequency.value = 60 + (noiseIntensity * 200); // More reasonable range
-                            
-                            // Update hiss reduction if it exists
-                            if (filterNodes.hissReduction) {
-                                filterNodes.hissReduction.frequency.value = 7000 - (noiseIntensity * 2000); // More reasonable cutoff
-                                filterNodes.hissReduction.gain.value = -(noiseIntensity * 12); // Moderate reduction
-                            }
-                        }
-                        if (sliderId === 'clarity' && filterNodes.clarity) {
-                            // Moderate clarity enhancement
-                            filterNodes.clarity.gain.value = parseFloat(value) * 0.4; // Moderate boost
-                        }
-                        if (sliderId === 'vocal' && filterNodes.vocal) {
-                            // Moderate vocal enhancement
-                            filterNodes.vocal.gain.value = parseFloat(value) * 0.35; // Moderate boost
+                            filterNodes.highpass.frequency.value = 60 + (noiseIntensity * 180);
                         }
                     }
                     
@@ -852,94 +836,39 @@
                 const vocal = document.getElementById('vocal').value;
                 const volume = document.getElementById('volume').value / 100;
                 
-                // Apply filters
+                // Apply simple, working filters
                 const lowpass = offlineContext.createBiquadFilter();
                 lowpass.type = 'lowpass';
                 lowpass.frequency.value = parseInt(freqCut);
                 lowpass.Q.value = 1;
                 
-                // Improved noise reduction with multiple stages
-                const noiseIntensity = parseFloat(noiseReduction) / 100;
-                
-                // Stage 1: Moderate highpass to remove low-frequency rumble
-                const highpass1 = offlineContext.createBiquadFilter();
-                highpass1.type = 'highpass';
-                highpass1.frequency.value = 60 + (noiseIntensity * 200); // 60Hz to 260Hz (more reasonable)
-                highpass1.Q.value = 0.8; // Gentler cutoff
-                
-                // Stage 2: Remove hiss using moderate high-shelf
-                const hissReduction = offlineContext.createBiquadFilter();
-                hissReduction.type = 'highshelf';
-                hissReduction.frequency.value = 7000 - (noiseIntensity * 2000); // 7000Hz to 5000Hz
-                hissReduction.gain.value = -(noiseIntensity * 12); // Up to -12dB reduction (reasonable)
-                
-                // Stage 3: Moderate notch filters for AC hum and harmonics
-                const notch120 = offlineContext.createBiquadFilter();
-                notch120.type = 'notch';
-                notch120.frequency.value = 120;
-                notch120.Q.value = 8 * noiseIntensity; // Moderate notch
-                
-                // Additional notch for 60Hz
-                const notch60 = offlineContext.createBiquadFilter();
-                notch60.type = 'notch';
-                notch60.frequency.value = 60;
-                notch60.Q.value = 6 * noiseIntensity;
-                
-                // Stage 4: Moderate dynamic range compression
-                const compressor = offlineContext.createDynamicsCompressor();
-                compressor.threshold.value = -40 + (noiseIntensity * 10); // More conservative threshold
-                compressor.knee.value = 10; // Softer knee
-                compressor.ratio.value = 4 + (noiseIntensity * 8); // Up to 12:1 ratio (reasonable)
-                compressor.attack.value = 0.003; // Moderate attack
-                compressor.release.value = 0.25; // Moderate release
-                
-                // Stage 5: Moderate gate
-                const gate = offlineContext.createGain();
-                gate.gain.value = 1 - (noiseIntensity * 0.2); // Moderate gating effect
-                
-                // Moderate clarity enhancement
                 const clarityFilter = offlineContext.createBiquadFilter();
                 clarityFilter.type = 'peaking';
                 clarityFilter.frequency.value = 3000;
-                clarityFilter.Q.value = 1.5; // Moderate Q for natural effect
-                clarityFilter.gain.value = parseFloat(clarity) * 0.4; // Moderate boost (was 0.3)
+                clarityFilter.Q.value = 1;
+                clarityFilter.gain.value = parseFloat(clarity) * 0.3;
                 
-                // Additional clarity filter for presence
-                const presenceFilter = offlineContext.createBiquadFilter();
-                presenceFilter.type = 'peaking';
-                presenceFilter.frequency.value = 5000;
-                presenceFilter.Q.value = 1.2;
-                presenceFilter.gain.value = parseFloat(clarity) * 0.3;
-                
-                // Moderate vocal enhancement
                 const vocalFilter = offlineContext.createBiquadFilter();
                 vocalFilter.type = 'peaking';
                 vocalFilter.frequency.value = 1000;
-                vocalFilter.Q.value = 2; // Moderate Q for natural effect
-                vocalFilter.gain.value = parseFloat(vocal) * 0.35; // Moderate boost (was 0.25)
-                
-                // Additional vocal filter for warmth
-                const warmthFilter = offlineContext.createBiquadFilter();
-                warmthFilter.type = 'peaking';
-                warmthFilter.frequency.value = 2500;
-                warmthFilter.Q.value = 1.5;
-                warmthFilter.gain.value = parseFloat(vocal) * 0.25;
+                vocalFilter.Q.value = 2;
+                vocalFilter.gain.value = parseFloat(vocal) * 0.25;
                 
                 const gainNode = offlineContext.createGain();
                 gainNode.gain.value = volume;
                 
+                // Simple noise reduction - just highpass filter
+                const noiseIntensity = parseFloat(noiseReduction) / 100;
+                const highpass = offlineContext.createBiquadFilter();
+                highpass.type = 'highpass';
+                highpass.frequency.value = 60 + (noiseIntensity * 180);
+                highpass.Q.value = 0.7;
+                
                 source
-                    .connect(highpass1)
-                    .connect(notch60)
-                    .connect(notch120)
-                    .connect(hissReduction)
+                    .connect(highpass)
                     .connect(lowpass)
-                    .connect(compressor)
-                    .connect(gate)
                     .connect(clarityFilter)
-                    .connect(presenceFilter)
                     .connect(vocalFilter)
-                    .connect(warmthFilter)
                     .connect(gainNode)
                     .connect(offlineContext.destination);
                 
