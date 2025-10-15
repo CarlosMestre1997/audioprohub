@@ -696,11 +696,11 @@ const SamplX = () => {
       console.log('🎵 Rendering audio...');
       const renderedBuffer = await offlineContext.startRendering();
       
-      console.log('📦 Converting to MP3...');
-      const mp3Blob = await audioBufferToMp3(renderedBuffer);
+      console.log('📦 Converting to WAV...');
+      const wavBlob = await audioBufferToWav(renderedBuffer);
       
-      setRecordedAudio(mp3Blob);
-      console.log('✅ Recording complete! Click "Download Recording" to save as MP3.');
+      setRecordedAudio(wavBlob);
+      console.log('✅ Recording complete! Click "Download Recording" to save as WAV.');
       
     } catch (error) {
       console.error('Error processing recording:', error);
@@ -771,15 +771,11 @@ const SamplX = () => {
     source.start(event.timestamp);
   };
   
-  // Convert AudioBuffer to MP3
-  const audioBufferToMp3 = async (audioBuffer) => {
+  // Convert AudioBuffer to WAV
+  const audioBufferToWav = async (audioBuffer) => {
     const numberOfChannels = audioBuffer.numberOfChannels;
     const length = audioBuffer.length;
     const sampleRate = audioBuffer.sampleRate;
-    
-    // Initialize MP3 encoder
-    const mp3encoder = new lamejs.Mp3Encoder(numberOfChannels, sampleRate, 128);
-    const mp3Data = [];
     
     // Convert float32 to int16
     const leftChannel = audioBuffer.getChannelData(0);
@@ -793,27 +789,43 @@ const SamplX = () => {
       rightInt16[i] = Math.max(-32768, Math.min(32767, rightChannel[i] * 32768));
     }
     
-    // Encode in chunks
-    const chunkSize = 1152;
-    for (let i = 0; i < leftInt16.length; i += chunkSize) {
-      const leftChunk = leftInt16.subarray(i, i + chunkSize);
-      const rightChunk = rightInt16.subarray(i, i + chunkSize);
-      
-      const mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
-      if (mp3buf.length > 0) {
-        mp3Data.push(mp3buf);
+    // Create WAV file
+    const arrayBuffer = new ArrayBuffer(44 + leftInt16.length * numberOfChannels * 2);
+    const view = new DataView(arrayBuffer);
+    
+    // WAV header
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + leftInt16.length * numberOfChannels * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+    view.setUint16(32, numberOfChannels * 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, leftInt16.length * numberOfChannels * 2, true);
+    
+    // Write audio data
+    let offset = 44;
+    for (let i = 0; i < leftInt16.length; i++) {
+      view.setInt16(offset, leftInt16[i], true);
+      offset += 2;
+      if (numberOfChannels > 1) {
+        view.setInt16(offset, rightInt16[i], true);
+        offset += 2;
       }
     }
     
-    // Flush remaining data
-    const mp3buf = mp3encoder.flush();
-    if (mp3buf.length > 0) {
-      mp3Data.push(mp3buf);
-    }
-    
-    // Create blob
-    const blob = new Blob(mp3Data, { type: 'audio/mp3' });
-    return blob;
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
   };
 
   const downloadRecording = () => {
@@ -826,17 +838,15 @@ const SamplX = () => {
     const a = document.createElement('a');
     a.href = url;
     
-    // Determine file extension based on blob type
-    const extension = recordedAudio.type.includes('mp3') ? 'mp3' : 
-                     recordedAudio.type.includes('wav') ? 'wav' : 'webm';
-    a.download = `samplx-recording-${Date.now()}.${extension}`;
+    // WAV file
+    a.download = `samplx-recording-${Date.now()}.wav`;
     
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    console.log(`📥 Recording downloaded as ${extension.toUpperCase()}!`);
+    console.log(`📥 Recording downloaded as WAV!`);
   };
 
   const updateSliceSetting = (idx, key, value) => {

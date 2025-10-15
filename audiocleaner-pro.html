@@ -754,15 +754,23 @@
                             filterNodes.gain.gain.value = parseFloat(value) / 100;
                         }
                         if (sliderId === 'noiseReduction' && filterNodes.highpass) {
-                            // Improved noise reduction with noticeable effect
+                            // Much more aggressive noise reduction for noticeable effect
                             const noiseIntensity = parseFloat(value) / 100;
-                            filterNodes.highpass.frequency.value = 60 + (noiseIntensity * 180);
+                            filterNodes.highpass.frequency.value = 80 + (noiseIntensity * 320); // More aggressive range
                             
                             // Update hiss reduction if it exists
                             if (filterNodes.hissReduction) {
-                                filterNodes.hissReduction.frequency.value = 6000 - (noiseIntensity * 2000);
-                                filterNodes.hissReduction.gain.value = -(noiseIntensity * 18);
+                                filterNodes.hissReduction.frequency.value = 8000 - (noiseIntensity * 3000); // Lower cutoff
+                                filterNodes.hissReduction.gain.value = -(noiseIntensity * 30); // Stronger reduction
                             }
+                        }
+                        if (sliderId === 'clarity' && filterNodes.clarity) {
+                            // Much stronger clarity enhancement
+                            filterNodes.clarity.gain.value = parseFloat(value) * 0.8; // Was 0.3, now 0.8
+                        }
+                        if (sliderId === 'vocal' && filterNodes.vocal) {
+                            // Much stronger vocal enhancement
+                            filterNodes.vocal.gain.value = parseFloat(value) * 0.7; // Was 0.25, now 0.7
                         }
                     }
                     
@@ -853,62 +861,85 @@
                 // Improved noise reduction with multiple stages
                 const noiseIntensity = parseFloat(noiseReduction) / 100;
                 
-                // Stage 1: Aggressive highpass to remove low-frequency rumble
+                // Stage 1: MUCH more aggressive highpass to remove low-frequency rumble
                 const highpass1 = offlineContext.createBiquadFilter();
                 highpass1.type = 'highpass';
-                highpass1.frequency.value = 60 + (noiseIntensity * 180); // 60Hz to 240Hz
-                highpass1.Q.value = 0.7;
+                highpass1.frequency.value = 80 + (noiseIntensity * 320); // 80Hz to 400Hz (more aggressive)
+                highpass1.Q.value = 1.2; // Sharper cutoff
                 
-                // Stage 2: Remove hiss using aggressive high-shelf
+                // Stage 2: Remove hiss using VERY aggressive high-shelf
                 const hissReduction = offlineContext.createBiquadFilter();
                 hissReduction.type = 'highshelf';
-                hissReduction.frequency.value = 6000 - (noiseIntensity * 2000); // 6000Hz to 4000Hz
-                hissReduction.gain.value = -(noiseIntensity * 18); // Up to -18dB reduction
+                hissReduction.frequency.value = 8000 - (noiseIntensity * 3000); // 8000Hz to 5000Hz (lower cutoff)
+                hissReduction.gain.value = -(noiseIntensity * 30); // Up to -30dB reduction (much stronger)
                 
-                // Stage 3: Notch filter for typical AC hum (50/60Hz harmonics)
+                // Stage 3: Multiple notch filters for AC hum and harmonics
                 const notch120 = offlineContext.createBiquadFilter();
                 notch120.type = 'notch';
                 notch120.frequency.value = 120;
-                notch120.Q.value = 10 * noiseIntensity;
+                notch120.Q.value = 15 * noiseIntensity; // Sharper notch
                 
-                // Stage 4: Dynamic range compression to reduce noise floor
+                // Additional notch for 60Hz
+                const notch60 = offlineContext.createBiquadFilter();
+                notch60.type = 'notch';
+                notch60.frequency.value = 60;
+                notch60.Q.value = 12 * noiseIntensity;
+                
+                // Stage 4: Much more aggressive dynamic range compression
                 const compressor = offlineContext.createDynamicsCompressor();
-                compressor.threshold.value = -40 + (noiseIntensity * 15); // More aggressive with higher intensity
-                compressor.knee.value = 10;
-                compressor.ratio.value = 4 + (noiseIntensity * 8); // Up to 12:1 ratio
-                compressor.attack.value = 0.003;
-                compressor.release.value = 0.25;
+                compressor.threshold.value = -30 + (noiseIntensity * 20); // Higher threshold, more aggressive
+                compressor.knee.value = 5; // Harder knee
+                compressor.ratio.value = 8 + (noiseIntensity * 16); // Up to 24:1 ratio (very aggressive)
+                compressor.attack.value = 0.001; // Faster attack
+                compressor.release.value = 0.1; // Faster release
                 
-                // Stage 5: Gate to cut very quiet sounds (noise)
+                // Stage 5: More aggressive gate
                 const gate = offlineContext.createGain();
-                // This is a simple gate - reduce gain for quieter signals
-                // In a real implementation, you'd analyze the signal level
-                gate.gain.value = 1 - (noiseIntensity * 0.3);
+                gate.gain.value = 1 - (noiseIntensity * 0.5); // Stronger gating effect
                 
+                // Much more aggressive clarity enhancement
                 const clarityFilter = offlineContext.createBiquadFilter();
                 clarityFilter.type = 'peaking';
                 clarityFilter.frequency.value = 3000;
-                clarityFilter.Q.value = 1;
-                clarityFilter.gain.value = parseFloat(clarity) * 0.3;
+                clarityFilter.Q.value = 2.5; // Sharper Q for more focused effect
+                clarityFilter.gain.value = parseFloat(clarity) * 0.8; // Much stronger boost (was 0.3)
                 
+                // Additional clarity filter for presence
+                const presenceFilter = offlineContext.createBiquadFilter();
+                presenceFilter.type = 'peaking';
+                presenceFilter.frequency.value = 5000;
+                presenceFilter.Q.value = 1.5;
+                presenceFilter.gain.value = parseFloat(clarity) * 0.6;
+                
+                // Much more aggressive vocal enhancement
                 const vocalFilter = offlineContext.createBiquadFilter();
                 vocalFilter.type = 'peaking';
                 vocalFilter.frequency.value = 1000;
-                vocalFilter.Q.value = 2;
-                vocalFilter.gain.value = parseFloat(vocal) * 0.25;
+                vocalFilter.Q.value = 3; // Sharper Q for more focused effect
+                vocalFilter.gain.value = parseFloat(vocal) * 0.7; // Much stronger boost (was 0.25)
+                
+                // Additional vocal filter for warmth
+                const warmthFilter = offlineContext.createBiquadFilter();
+                warmthFilter.type = 'peaking';
+                warmthFilter.frequency.value = 2500;
+                warmthFilter.Q.value = 2;
+                warmthFilter.gain.value = parseFloat(vocal) * 0.5;
                 
                 const gainNode = offlineContext.createGain();
                 gainNode.gain.value = volume;
                 
                 source
                     .connect(highpass1)
+                    .connect(notch60)
                     .connect(notch120)
                     .connect(hissReduction)
                     .connect(lowpass)
                     .connect(compressor)
                     .connect(gate)
                     .connect(clarityFilter)
+                    .connect(presenceFilter)
                     .connect(vocalFilter)
+                    .connect(warmthFilter)
                     .connect(gainNode)
                     .connect(offlineContext.destination);
                 
