@@ -26,6 +26,7 @@ const SamplX = () => {
   const flangerNodesRef = useRef({});
   const recordingEventsRef = useRef([]); // Track played slices during recording
   const recordingStartTimeRef = useRef(null);
+  const isRecordingRef = useRef(false); // Use ref instead of state to avoid closure issues
 
   useEffect(() => {
     audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -443,14 +444,15 @@ const SamplX = () => {
     setActiveSlice(idx);
     sourceNodesRef.current.push(source);
     
-    // Record this slice event if recording is active
+    // Record this slice event if recording is active (use REF not state!)
     console.log('🔍 Checking recording status:', { 
-      isRecording, 
+      isRecordingRef: isRecordingRef.current,
+      isRecordingState: isRecording,
       hasStartTime: !!recordingStartTimeRef.current,
       currentEventsCount: recordingEventsRef.current.length 
     });
     
-    if (isRecording && recordingStartTimeRef.current !== null) {
+    if (isRecordingRef.current && recordingStartTimeRef.current !== null) {
       const currentTime = audioContextRef.current.currentTime;
       const relativeTime = currentTime - recordingStartTimeRef.current;
       
@@ -470,7 +472,7 @@ const SamplX = () => {
       console.log('✅ Recorded slice event:', recordingEvent);
       console.log('📊 Total recorded events:', recordingEventsRef.current.length);
     } else {
-      console.log('❌ NOT recording - skipping event');
+      console.log('❌ NOT recording - skipping event (ref:', isRecordingRef.current, ', state:', isRecording, ')');
     }
   };
 
@@ -668,14 +670,20 @@ const SamplX = () => {
     recordingEventsRef.current = [];
     recordingStartTimeRef.current = audioContextRef.current.currentTime;
     
+    // Use BOTH ref and state - ref for immediate access, state for UI updates
+    isRecordingRef.current = true;
     setIsRecording(true);
+    
     console.log('🎙️ Recording started - play your samples now!');
-    console.log('Recording will track when you play slices and render them to MP3.');
+    console.log('Recording will track when you play slices and render them to WAV.');
+    console.log('isRecordingRef.current:', isRecordingRef.current);
   };
 
   const stopRecording = async () => {
-    if (!isRecording) return;
+    if (!isRecordingRef.current) return;
     
+    // Stop recording in both ref and state
+    isRecordingRef.current = false;
     setIsRecording(false);
     
     try {
