@@ -1207,6 +1207,39 @@ const SamplX = () => {
           />
         </div>
 
+        {/* Quick Preview Buttons */}
+        {audioBuffer && slices.length > 0 && (
+          <div className="bg-zinc-800 rounded-lg p-4 mb-6 border border-blue-700">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="text-sm text-blue-400 font-bold">Quick Preview:</div>
+              <div className="text-xs text-gray-400">Click to hear each slice (0-9 keys)</div>
+            </div>
+            <div className="grid grid-cols-10 gap-2">
+              {Array.from({ length: 10 }).map((_, idx) => {
+                const hasSlice = slices[idx];
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => hasSlice && playSlice(idx)}
+                    disabled={!hasSlice}
+                    className={`
+                      px-3 py-2 rounded font-bold text-sm transition
+                      ${hasSlice
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                        : 'bg-zinc-700 text-gray-500 cursor-not-allowed opacity-40'
+                      }
+                      ${activeSlice === idx ? 'ring-2 ring-yellow-400' : ''}
+                    `}
+                    title={hasSlice ? `Preview Slice ${idx + 1}` : `No slice at position ${idx + 1}`}
+                  >
+                    {idx}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {slices.map((slice, idx) => {
             const settings = sliceSettings[idx] || {};
