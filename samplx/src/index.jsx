@@ -27,6 +27,7 @@ const SamplX = () => {
   const recordingEventsRef = useRef([]); // Track played slices during recording
   const recordingStartTimeRef = useRef(null);
   const isRecordingRef = useRef(false); // Use ref instead of state to avoid closure issues
+  const currentRecordingEventRef = useRef(null); // Track currently playing slice for recording
 
   useEffect(() => {
     audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -445,34 +446,36 @@ const SamplX = () => {
     sourceNodesRef.current.push(source);
     
     // Record this slice event if recording is active (use REF not state!)
-    console.log('🔍 Checking recording status:', { 
-      isRecordingRef: isRecordingRef.current,
-      isRecordingState: isRecording,
-      hasStartTime: !!recordingStartTimeRef.current,
-      currentEventsCount: recordingEventsRef.current.length 
-    });
-    
     if (isRecordingRef.current && recordingStartTimeRef.current !== null) {
       const currentTime = audioContextRef.current.currentTime;
       const relativeTime = currentTime - recordingStartTimeRef.current;
       
+      // If there's a previous event still playing, mark when it ended
+      if (currentRecordingEventRef.current) {
+        const previousEvent = currentRecordingEventRef.current;
+        const actualEndTime = relativeTime; // It ended when this new slice started
+        previousEvent.actualDuration = actualEndTime - previousEvent.timestamp;
+        console.log('⏹️ Previous slice stopped at:', actualEndTime, 'actual duration:', previousEvent.actualDuration);
+      }
+      
       // Calculate duration considering tempo and transpose
       const baseDuration = audioBuffersRef.current[idx].duration;
-      const actualDuration = baseDuration / source.playbackRate.value;
+      const theoreticalDuration = baseDuration / source.playbackRate.value;
       
       const recordingEvent = {
         sliceIndex: idx,
         timestamp: relativeTime,
-        duration: actualDuration,
+        duration: theoreticalDuration, // Full theoretical duration
+        actualDuration: theoreticalDuration, // Will be updated if interrupted
         settings: { ...settings },
         buffer: audioBuffersRef.current[idx]
       };
       
       recordingEventsRef.current.push(recordingEvent);
+      currentRecordingEventRef.current = recordingEvent; // Track as currently playing
+      
       console.log('✅ Recorded slice event:', recordingEvent);
       console.log('📊 Total recorded events:', recordingEventsRef.current.length);
-    } else {
-      console.log('❌ NOT recording - skipping event (ref:', isRecordingRef.current, ', state:', isRecording, ')');
     }
   };
 
@@ -686,6 +689,9 @@ const SamplX = () => {
     isRecordingRef.current = false;
     setIsRecording(false);
     
+    // Clear the current recording event reference
+    currentRecordingEventRef.current = null;
+    
     try {
       console.log('🔄 Processing recording...');
       console.log('Recorded events:', recordingEventsRef.current);
@@ -785,7 +791,11 @@ const SamplX = () => {
       chain.connect(offlineContext.destination);
     }
     
-    source.start(event.timestamp);
+    // Use actualDuration to stop the slice at the right time (when interrupted or naturally ended)
+    const duration = event.actualDuration || event.duration;
+    source.start(event.timestamp, 0, duration);
+    
+    console.log(`🎵 Rendering slice ${event.sliceIndex} at ${event.timestamp.toFixed(3)}s for ${duration.toFixed(3)}s`);
   };
   
   // Convert AudioBuffer to WAV
