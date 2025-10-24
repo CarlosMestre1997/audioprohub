@@ -23,7 +23,7 @@ const SamplX = () => {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const audioBuffersRef = useRef({});
-  const flangerNodesRef = useRef({});
+  const echoNodesRef = useRef({});
   const recordingEventsRef = useRef([]); // Track played slices during recording
   const recordingStartTimeRef = useRef(null);
   const isRecordingRef = useRef(false); // Use ref instead of state to avoid closure issues
@@ -380,34 +380,53 @@ const SamplX = () => {
     const gainNode = audioContextRef.current.createGain();
     gainNode.gain.value = settings.volume !== undefined ? settings.volume : 1;
     
-    const filterNode = audioContextRef.current.createBiquadFilter();
-    filterNode.type = 'lowpass';
-    filterNode.frequency.value = settings.filter || 10000;
+    // Dual filters: low cut and high cut
+    const lowCutFilter = audioContextRef.current.createBiquadFilter();
+    lowCutFilter.type = 'highpass';
+    lowCutFilter.frequency.value = settings.lowCut || 80; // Default 80Hz low cut
+    
+    const highCutFilter = audioContextRef.current.createBiquadFilter();
+    highCutFilter.type = 'lowpass';
+    highCutFilter.frequency.value = settings.highCut || 10000; // Default 10kHz high cut
 
-    source.playbackRate.value = (settings.tempo || 1) * Math.pow(2, (settings.transpose || 0) / 12);
+    // Separate tempo (speed) and transpose (pitch)
+    source.playbackRate.value = settings.tempo || 1; // Tempo only affects speed
+    
+    // Apply pitch shifting separately if transpose is used
+    if (settings.transpose && settings.transpose !== 0) {
+      // Use a pitch shifter node for transpose (we'll implement this)
+      const pitchRatio = Math.pow(2, (settings.transpose || 0) / 12);
+      // For now, we'll combine them until we add proper pitch shifting
+      source.playbackRate.value *= pitchRatio;
+    }
 
     let chain = source;
 
-    chain.connect(filterNode);
-    chain = filterNode;
+    // Connect through both filters
+    chain.connect(lowCutFilter);
+    lowCutFilter.connect(highCutFilter);
+    chain = highCutFilter;
 
-    if (settings.flanger && settings.flanger > 0) {
-      const delay = audioContextRef.current.createDelay(0.1);
-      const lfo = audioContextRef.current.createOscillator();
-      const lfoGain = audioContextRef.current.createGain();
-
-      lfo.frequency.value = 0.5;
-      lfoGain.gain.value = 0.005 * settings.flanger;
+    if (settings.echo && settings.echo > 0) {
+      const delay = audioContextRef.current.createDelay(0.5);
+      const feedback = audioContextRef.current.createGain();
+      const wetGain = audioContextRef.current.createGain();
       
-      lfo.connect(lfoGain);
-      lfoGain.connect(delay.delayTime);
+      delay.delayTime.value = 0.2; // 200ms delay
+      feedback.gain.value = 0.3 * settings.echo; // Feedback amount
+      wetGain.gain.value = 0.5 * settings.echo; // Wet signal level
       
+      // Create echo feedback loop
+      delay.connect(feedback);
+      feedback.connect(delay);
+      
+      // Connect input to delay and output
       chain.connect(delay);
-      delay.connect(gainNode);
-      chain = gainNode;
+      delay.connect(wetGain);
+      chain.connect(gainNode); // Direct signal
+      wetGain.connect(gainNode); // Echo signal
       
-      lfo.start();
-      flangerNodesRef.current[idx] = { lfo, delay };
+      echoNodesRef.current[idx] = { delay, feedback };
     } else {
       chain.connect(gainNode);
       chain = gainNode;
@@ -421,8 +440,8 @@ const SamplX = () => {
       const dryGain = audioContextRef.current.createGain();
       const wetGain = audioContextRef.current.createGain();
 
-      dryGain.gain.value = 1 - settings.reverb;
-      wetGain.gain.value = settings.reverb;
+      dryGain.gain.value = 1.0; // Always keep dry at 100%
+      wetGain.gain.value = settings.reverb * 0.6; // Max 60% wet level
 
       chain.connect(dryGain);
       chain.connect(convolver);
@@ -446,7 +465,13 @@ const SamplX = () => {
     sourceNodesRef.current.push(source);
     
     // Record this slice event if recording is active (use REF not state!)
-    if (isRecordingRef.current && recordingStartTimeRef.current !== null) {
+    if (isRecordingRef.current) {
+      // Set recording start time on first slice played
+      if (recordingStartTimeRef.current === null) {
+        recordingStartTimeRef.current = audioContextRef.current.currentTime;
+        console.log('🎬 Recording timeline started at:', recordingStartTimeRef.current);
+      }
+      
       const currentTime = audioContextRef.current.currentTime;
       const relativeTime = currentTime - recordingStartTimeRef.current;
       
@@ -503,14 +528,14 @@ const SamplX = () => {
     });
     sourceNodesRef.current = [];
 
-    Object.values(flangerNodesRef.current).forEach(({ lfo }) => {
+    Object.values(echoNodesRef.current).forEach(({ delay, feedback }) => {
       try {
-        lfo.stop();
+        // Echo nodes don't need to be stopped, they'll stop when disconnected
       } catch (e) {
         // Already stopped
       }
     });
-    flangerNodesRef.current = {};
+    echoNodesRef.current = {};
 
     setActiveSlice(null);
   };
@@ -519,6 +544,11 @@ const SamplX = () => {
     const newSlices = slices.filter((_, i) => i !== idx);
     const newSettings = { ...sliceSettings };
     delete newSettings[idx];
+
+    // Clean up echo nodes for this slice
+    if (echoNodesRef.current[idx]) {
+      delete echoNodesRef.current[idx];
+    }
 
     // Reindex settings
     const reindexedSettings = {};
@@ -595,14 +625,27 @@ const SamplX = () => {
     }
 
     source.buffer = sliceBuffer;
-    source.playbackRate.value = (settings.tempo || 1) * Math.pow(2, (settings.transpose || 0) / 12);
+    // Separate tempo (speed) and transpose (pitch)
+    source.playbackRate.value = settings.tempo || 1; // Tempo only affects speed
+    
+    // Apply pitch shifting separately if transpose is used
+    if (settings.transpose && settings.transpose !== 0) {
+      const pitchRatio = Math.pow(2, (settings.transpose || 0) / 12);
+      source.playbackRate.value *= pitchRatio;
+    }
 
-    const filterNode = offlineContext.createBiquadFilter();
-    filterNode.type = 'lowpass';
-    filterNode.frequency.value = settings.filter || 10000;
+    // Dual filters: low cut and high cut
+    const lowCutFilter = offlineContext.createBiquadFilter();
+    lowCutFilter.type = 'highpass';
+    lowCutFilter.frequency.value = settings.lowCut || 80; // Default 80Hz low cut
+    
+    const highCutFilter = offlineContext.createBiquadFilter();
+    highCutFilter.type = 'lowpass';
+    highCutFilter.frequency.value = settings.highCut || 10000; // Default 10kHz high cut
 
-    source.connect(filterNode);
-    filterNode.connect(offlineContext.destination);
+    source.connect(lowCutFilter);
+    lowCutFilter.connect(highCutFilter);
+    highCutFilter.connect(offlineContext.destination);
 
     source.start();
 
@@ -707,8 +750,8 @@ const SamplX = () => {
       
       console.log('Rendering', recordingEventsRef.current.length, 'events over', totalDuration.toFixed(2), 'seconds');
       
-      // Create offline audio context for rendering
-      const sampleRate = audioContextRef.current.sampleRate;
+      // Create offline audio context for rendering - use original sample rate
+      const sampleRate = recordingEventsRef.current[0]?.buffer?.sampleRate || audioContextRef.current.sampleRate;
       const offlineContext = new OfflineAudioContext(2, totalDuration * sampleRate, sampleRate);
       
       // Render each recorded event
@@ -739,30 +782,49 @@ const SamplX = () => {
     const gainNode = offlineContext.createGain();
     gainNode.gain.value = event.settings.volume !== undefined ? event.settings.volume : 1;
     
-    const filterNode = offlineContext.createBiquadFilter();
-    filterNode.type = 'lowpass';
-    filterNode.frequency.value = event.settings.filter || 10000;
+    // Dual filters: low cut and high cut
+    const lowCutFilter = offlineContext.createBiquadFilter();
+    lowCutFilter.type = 'highpass';
+    lowCutFilter.frequency.value = event.settings.lowCut || 80; // Default 80Hz low cut
     
-    source.playbackRate.value = (event.settings.tempo || 1) * Math.pow(2, (event.settings.transpose || 0) / 12);
+    const highCutFilter = offlineContext.createBiquadFilter();
+    highCutFilter.type = 'lowpass';
+    highCutFilter.frequency.value = event.settings.highCut || 10000; // Default 10kHz high cut
+    
+    // Separate tempo (speed) and transpose (pitch)
+    source.playbackRate.value = event.settings.tempo || 1; // Tempo only affects speed
+    
+    // Apply pitch shifting separately if transpose is used
+    if (event.settings.transpose && event.settings.transpose !== 0) {
+      const pitchRatio = Math.pow(2, (event.settings.transpose || 0) / 12);
+      source.playbackRate.value *= pitchRatio;
+    }
     
     let chain = source;
-    chain.connect(filterNode);
-    chain = filterNode;
     
-    if (event.settings.flanger && event.settings.flanger > 0) {
-      const delay = offlineContext.createDelay(0.1);
-      const lfo = offlineContext.createOscillator();
-      const lfoGain = offlineContext.createGain();
+    // Connect through both filters
+    chain.connect(lowCutFilter);
+    lowCutFilter.connect(highCutFilter);
+    chain = highCutFilter;
+    
+    if (event.settings.echo && event.settings.echo > 0) {
+      const delay = offlineContext.createDelay(0.5);
+      const feedback = offlineContext.createGain();
+      const wetGain = offlineContext.createGain();
       
-      lfo.frequency.value = 0.5;
-      lfoGain.gain.value = 0.005 * event.settings.flanger;
+      delay.delayTime.value = 0.2; // 200ms delay
+      feedback.gain.value = 0.3 * event.settings.echo; // Feedback amount
+      wetGain.gain.value = 0.5 * event.settings.echo; // Wet signal level
       
-      lfo.connect(lfoGain);
-      lfoGain.connect(delay.delayTime);
+      // Create echo feedback loop
+      delay.connect(feedback);
+      feedback.connect(delay);
       
+      // Connect input to delay and output
       chain.connect(delay);
-      delay.connect(gainNode);
-      chain = gainNode;
+      delay.connect(wetGain);
+      chain.connect(gainNode); // Direct signal
+      wetGain.connect(gainNode); // Echo signal
     } else {
       chain.connect(gainNode);
       chain = gainNode;
@@ -776,8 +838,8 @@ const SamplX = () => {
       const dryGain = offlineContext.createGain();
       const wetGain = offlineContext.createGain();
       
-      dryGain.gain.value = 1 - event.settings.reverb;
-      wetGain.gain.value = event.settings.reverb;
+      dryGain.gain.value = 1.0; // Always keep dry at 100%
+      wetGain.gain.value = event.settings.reverb * 0.6; // Max 60% wet level
       
       chain.connect(dryGain);
       chain.connect(convolver);
@@ -1113,7 +1175,7 @@ const SamplX = () => {
                 onClick={startRecording}
                 className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded flex items-center gap-2 transition"
               >
-                <Mic size={16} /> Record
+                <Mic size={16} /> Record Performance
               </button>
             ) : (
               <button
@@ -1338,33 +1400,46 @@ const SamplX = () => {
                   </div>
 
                   <div>
-                    <label className="text-gray-400">Filter: {settings.filter || 10000}Hz</label>
+                    <label className="text-gray-400">Low Cut: {(settings.lowCut || 80).toFixed(0)}Hz</label>
                     <input
                       type="range"
-                      min="100"
-                      max="10000"
-                      step="100"
-                      value={settings.filter || 10000}
-                      onChange={(e) => updateSliceSetting(idx, 'filter', parseFloat(e.target.value))}
+                      min="20"
+                      max="1000"
+                      step="10"
+                      value={settings.lowCut || 80}
+                      onChange={(e) => updateSliceSetting(idx, 'lowCut', parseFloat(e.target.value))}
                       className="w-full"
                     />
                   </div>
 
                   <div>
-                    <label className="text-gray-400">Flanger: {((settings.flanger || 0) * 100).toFixed(0)}%</label>
+                    <label className="text-gray-400">High Cut: {(settings.highCut || 10000).toFixed(0)}Hz</label>
+                    <input
+                      type="range"
+                      min="1000"
+                      max="20000"
+                      step="100"
+                      value={settings.highCut || 10000}
+                      onChange={(e) => updateSliceSetting(idx, 'highCut', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-gray-400">Echo: {((settings.echo || 0) * 100).toFixed(0)}%</label>
                     <input
                       type="range"
                       min="0"
                       max="1"
                       step="0.1"
-                      value={settings.flanger || 0}
-                      onChange={(e) => updateSliceSetting(idx, 'flanger', parseFloat(e.target.value))}
+                      value={settings.echo || 0}
+                      onChange={(e) => updateSliceSetting(idx, 'echo', parseFloat(e.target.value))}
                       className="w-full"
                     />
                   </div>
 
                   <div>
-                    <label className="text-gray-400">Reverb: {((settings.reverb || 0) * 100).toFixed(0)}%</label>
+                    <label className="text-gray-400">Reverb: {((settings.reverb || 0) * 60).toFixed(0)}%</label>
                     <input
                       type="range"
                       min="0"
