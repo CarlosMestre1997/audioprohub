@@ -388,7 +388,7 @@ const SamplX = () => {
       const newSettings = { ...sliceSettings };
       setSlices(newSlices);
       saveToHistory(newSlices, newSettings);
-      setPendingSliceStart(null);
+      setPendingSliceStart(null); // Don't start a new slice automatically
     }
   };
 
@@ -534,13 +534,13 @@ const SamplX = () => {
     // Update playback position during playback
     const startTime = audioContextRef.current.currentTime;
     const updatePlaybackPosition = () => {
-      if (sourceNodesRef.current.length > 0) {
+      if (sourceNodesRef.current.length > 0 && activeSlice === idx) {
         const currentTime = audioContextRef.current.currentTime;
         const elapsed = currentTime - startTime;
         const newPosition = slice.start + elapsed;
         setPlaybackPosition(newPosition);
         
-        if (newPosition < slice.end) {
+        if (newPosition < slice.end && activeSlice === idx) {
           requestAnimationFrame(updatePlaybackPosition);
         } else {
           setPlaybackPosition(0);
@@ -1321,10 +1321,10 @@ const SamplX = () => {
             </button>
           </div>
 
-          <div className="bg-zinc-800 rounded-lg p-4 mb-6 border border-blue-700">
+          <div className="bg-zinc-800 rounded-lg p-2 mb-4 border border-blue-700">
           {/* Timeline Display */}
           {audioBuffer && (
-            <div className="mb-3 h-8 bg-zinc-900 rounded border border-blue-700 relative overflow-hidden">
+            <div className="mb-2 h-6 bg-zinc-900 rounded border border-blue-700 relative overflow-hidden">
               <div className="absolute inset-0 flex items-center">
                 {(() => {
                   const visibleDuration = audioBuffer.duration / zoomLevel;
@@ -1417,13 +1417,14 @@ const SamplX = () => {
           </div>
           <canvas
             ref={canvasRef}
-            width={1200}
-            height={200}
+            width={1400}
+            height={250}
             onClick={handleCanvasClick}
             onWheel={(e) => {
               if (!audioBuffer || !e.altKey) return;
               
               e.preventDefault();
+              e.stopPropagation();
               
               const canvas = canvasRef.current;
               const rect = canvas.getBoundingClientRect();
@@ -1581,13 +1582,13 @@ const SamplX = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
           {slices.map((slice, idx) => {
             const settings = sliceSettings[idx] || {};
             return (
               <div
                 key={idx}
-                  className={'bg-zinc-800 rounded-lg p-4 border-2 transition ' + (activeSlice === idx ? 'border-blue-500' : 'border-transparent')}
+                  className={'bg-zinc-800 rounded-lg p-2 border-2 transition ' + (activeSlice === idx ? 'border-blue-500' : 'border-transparent')}
               >
                 <div className="flex items-center justify-between mb-3">
                     <span className="text-lg font-bold text-blue-400">
