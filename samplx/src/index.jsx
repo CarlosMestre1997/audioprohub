@@ -8,6 +8,8 @@ const SamplX = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [sliceSettings, setSliceSettings] = useState({});
   const [expandedEQ, setExpandedEQ] = useState({});
+  const [draggingSlice, setDraggingSlice] = useState(null);
+  const [draggingBoundary, setDraggingBoundary] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [zoomOffset, setZoomOffset] = useState(0);
   const [pendingSliceStart, setPendingSliceStart] = useState(null);
@@ -147,29 +149,11 @@ const SamplX = () => {
         
         // If audio is playing, stop it
         if (sourceNodesRef.current.length > 0) {
-          stopAllAudio();
-          return;
-        }
-        
-        // If no audio is playing, start selection or play from beginning
-        if (audioBuffer) {
-          if (pendingSliceStart === null) {
-            // Start new slice selection at beginning
-            setPendingSliceStart(0);
-          } else {
-            // Complete the slice selection
-            const endTime = audioBuffer.duration;
-            if (pendingSliceStart < endTime) {
-              const newSlice = { start: pendingSliceStart, end: endTime };
-              setSlices([...slices, newSlice]);
-              setPendingSliceStart(null);
-              
-              // Save to history
-              const newHistory = history.slice(0, historyIndex + 1);
-              newHistory.push({ slices: [...slices, newSlice] });
-              setHistory(newHistory);
-              setHistoryIndex(newHistory.length - 1);
-            }
+        stopAllAudio();
+        } else {
+          // If no audio is playing, start playing from beginning
+          if (audioBuffer && slices.length > 0) {
+            playSlice(0); // Play first slice
           }
         }
         return;
@@ -1285,24 +1269,30 @@ const SamplX = () => {
           <div className="bg-zinc-800 rounded-lg p-4 mb-6 border border-blue-700">
           {/* Timeline Display */}
           {audioBuffer && (
-            <div className="mb-3 h-6 bg-zinc-900 rounded border border-blue-700 relative overflow-hidden">
+            <div className="mb-3 h-8 bg-zinc-900 rounded border border-blue-700 relative overflow-hidden">
               <div className="absolute inset-0 flex items-center">
-                {Array.from({ length: Math.ceil(audioBuffer.duration / zoomLevel) + 1 }, (_, i) => {
-                  const time = zoomOffset + (i * audioBuffer.duration / zoomLevel) / Math.ceil(audioBuffer.duration / zoomLevel);
-                  const minutes = Math.floor(time / 60);
-                  const seconds = Math.floor(time % 60);
-                  const x = (time - zoomOffset) / (audioBuffer.duration / zoomLevel) * 100;
+                {(() => {
+                  const visibleDuration = audioBuffer.duration / zoomLevel;
+                  const numMarkers = Math.min(10, Math.max(3, Math.ceil(visibleDuration / 5))); // Show 3-10 markers
+                  const step = visibleDuration / numMarkers;
                   
-                  return (
-                    <div
-                      key={i}
-                      className="absolute text-xs text-blue-300 font-mono"
-                      style={{ left: `${x}%`, transform: 'translateX(-50%)' }}
-                    >
-                      {minutes}:{seconds.toString().padStart(2, '0')}
-                    </div>
-                  );
-                })}
+                  return Array.from({ length: numMarkers + 1 }, (_, i) => {
+                    const time = zoomOffset + (i * step);
+                    const minutes = Math.floor(time / 60);
+                    const seconds = Math.floor(time % 60);
+                    const x = (i / numMarkers) * 100;
+                    
+                    return (
+                      <div
+                        key={i}
+                        className="absolute text-xs text-blue-300 font-mono bg-zinc-900 px-1 rounded"
+                        style={{ left: `${x}%`, transform: 'translateX(-50%)' }}
+                      >
+                        {minutes}:{seconds.toString().padStart(2, '0')}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
@@ -1375,20 +1365,6 @@ const SamplX = () => {
             width={1200}
             height={200}
             onClick={handleCanvasClick}
-            onMouseMove={(e) => {
-              if (!audioBuffer) return;
-              const canvas = canvasRef.current;
-              const rect = canvas.getBoundingClientRect();
-              const scaleX = canvas.width / rect.width;
-              const x = (e.clientX - rect.left) * scaleX;
-              const visibleDuration = audioBuffer.duration / zoomLevel;
-              const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
-              const hoverTime = startTime + (x / canvas.width) * visibleDuration;
-              
-              if (hoverTime >= 0 && hoverTime <= audioBuffer.duration) {
-                  canvas.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'40\' viewBox=\'0 0 20 40\'><line x1=\'10\' y1=\'0\' x2=\'10\' y2=\'40\' stroke=\'%2300b4d8\' stroke-width=\'2\'/><circle cx=\'10\' cy=\'20\' r=\'3\' fill=\'%2300b4d8\'/></svg>") 10 20, crosshair';
-              }
-            }}
             onWheel={(e) => {
               if (!audioBuffer || !e.altKey) return;
               
@@ -1399,7 +1375,8 @@ const SamplX = () => {
               const x = e.clientX - rect.left;
               const cursorTime = zoomOffset + (x / rect.width) * (audioBuffer.duration / zoomLevel);
               
-              const zoomFactor = e.deltaY > 0 ? 1.2 : 0.8;
+              // More aggressive zoom factors for snappier response
+              const zoomFactor = e.deltaY > 0 ? 1.5 : 0.7; // Zoom in more aggressively
               const newZoomLevel = Math.max(0.1, Math.min(50, zoomLevel * zoomFactor));
               
               // Focus zoom on cursor position
@@ -1409,6 +1386,96 @@ const SamplX = () => {
               setZoomOffset(Math.max(0, Math.min(audioBuffer.duration - audioBuffer.duration / newZoomLevel, newZoomOffset)));
               
               drawWaveform(audioBuffer);
+            }}
+            onMouseDown={(e) => {
+              if (!audioBuffer) return;
+              
+              const canvas = canvasRef.current;
+              const rect = canvas.getBoundingClientRect();
+              const scaleX = canvas.width / rect.width;
+              const x = (e.clientX - rect.left) * scaleX;
+              
+              const visibleDuration = audioBuffer.duration / zoomLevel;
+              const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
+              const clickTime = startTime + (x / canvas.width) * visibleDuration;
+              
+              // Check if clicking on a slice boundary
+              for (let i = 0; i < slices.length; i++) {
+                const slice = slices[i];
+                const startX = ((slice.start - startTime) / visibleDuration) * canvas.width;
+                const endX = ((slice.end - startTime) / visibleDuration) * canvas.width;
+                
+                // Check if clicking near start boundary (within 10 pixels)
+                if (Math.abs(x - startX) < 10) {
+                  setDraggingSlice(i);
+                  setDraggingBoundary('start');
+                  return;
+                }
+                
+                // Check if clicking near end boundary (within 10 pixels)
+                if (Math.abs(x - endX) < 10) {
+                  setDraggingSlice(i);
+                  setDraggingBoundary('end');
+                  return;
+                }
+              }
+              
+              // If not clicking on boundary, handle normal slice creation
+              handleCanvasClick(e);
+            }}
+            onMouseMove={(e) => {
+              if (!audioBuffer) return;
+              
+              const canvas = canvasRef.current;
+              const rect = canvas.getBoundingClientRect();
+              const scaleX = canvas.width / rect.width;
+              const x = (e.clientX - rect.left) * scaleX;
+              const visibleDuration = audioBuffer.duration / zoomLevel;
+              const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
+              const hoverTime = startTime + (x / canvas.width) * visibleDuration;
+              
+              // Update cursor based on what's under the mouse
+              let cursorStyle = 'crosshair';
+              if (draggingSlice !== null) {
+                cursorStyle = 'ew-resize'; // Horizontal resize cursor
+              } else {
+                // Check if hovering over slice boundaries
+                for (let i = 0; i < slices.length; i++) {
+                  const slice = slices[i];
+                  const startX = ((slice.start - startTime) / visibleDuration) * canvas.width;
+                  const endX = ((slice.end - startTime) / visibleDuration) * canvas.width;
+                  
+                  if (Math.abs(x - startX) < 10 || Math.abs(x - endX) < 10) {
+                    cursorStyle = 'ew-resize';
+                    break;
+                  }
+                }
+              }
+              
+              canvas.style.cursor = cursorStyle;
+              
+              // Handle dragging slice boundaries
+              if (draggingSlice !== null && draggingBoundary !== null) {
+                const newTime = Math.max(0, Math.min(audioBuffer.duration, hoverTime));
+                const slice = slices[draggingSlice];
+                
+                let newSlice = { ...slice };
+                if (draggingBoundary === 'start') {
+                  newSlice.start = Math.min(newTime, slice.end - 0.1); // Don't let start go past end
+                } else {
+                  newSlice.end = Math.max(newTime, slice.start + 0.1); // Don't let end go before start
+                }
+                
+                const newSlices = [...slices];
+                newSlices[draggingSlice] = newSlice;
+                setSlices(newSlices);
+                
+                drawWaveform(audioBuffer);
+              }
+            }}
+            onMouseUp={() => {
+              setDraggingSlice(null);
+              setDraggingBoundary(null);
             }}
               className="w-full bg-zinc-950 rounded border border-blue-700"
           />
@@ -1468,6 +1535,13 @@ const SamplX = () => {
                       <Play size={16} />
                     </button>
                     <button
+                      onClick={() => setExpandedEQ(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                      className={`p-2 rounded transition ${expandedEQ[idx] ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-500 hover:bg-purple-600'}`}
+                      title="Toggle EQ"
+                    >
+                      EQ
+                    </button>
+                    <button
                       onClick={() => deleteSlice(idx)}
                       className="p-2 bg-red-500 hover:bg-red-600 rounded transition"
                       title="Delete slice"
@@ -1517,31 +1591,36 @@ const SamplX = () => {
                     />
                   </div>
 
+                  {/* EQ Controls - Only show when expanded */}
+                  {expandedEQ[idx] && (
+                    <>
                   <div>
-                    <label className="text-gray-400">Low Cut: {(settings.lowCut || 80).toFixed(0)}Hz</label>
+                        <label className="text-gray-400">Low Cut: {(settings.lowCut || 80).toFixed(0)}Hz</label>
                     <input
                       type="range"
-                      min="20"
-                      max="1000"
-                      step="10"
-                      value={settings.lowCut || 80}
-                      onChange={(e) => updateSliceSetting(idx, 'lowCut', parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
+                          min="20"
+                          max="1000"
+                          step="10"
+                          value={settings.lowCut || 80}
+                          onChange={(e) => updateSliceSetting(idx, 'lowCut', parseFloat(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="text-gray-400">High Cut: {(settings.highCut || 10000).toFixed(0)}Hz</label>
-                    <input
-                      type="range"
-                      min="1000"
-                      max="20000"
+                      <div>
+                        <label className="text-gray-400">High Cut: {(settings.highCut || 10000).toFixed(0)}Hz</label>
+                        <input
+                          type="range"
+                          min="1000"
+                          max="20000"
                       step="100"
-                      value={settings.highCut || 10000}
-                      onChange={(e) => updateSliceSetting(idx, 'highCut', parseFloat(e.target.value))}
+                          value={settings.highCut || 10000}
+                          onChange={(e) => updateSliceSetting(idx, 'highCut', parseFloat(e.target.value))}
                       className="w-full"
                     />
                   </div>
+                    </>
+                  )}
 
                   <div>
                     <label className="text-gray-400">Echo: {((settings.echo || 0) * 100).toFixed(0)}%</label>
