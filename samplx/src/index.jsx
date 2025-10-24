@@ -149,11 +149,16 @@ const SamplX = () => {
         
         // If audio is playing, stop it
         if (sourceNodesRef.current.length > 0) {
-        stopAllAudio();
+          stopAllAudio();
         } else {
-          // If no audio is playing, start playing from beginning
-          if (audioBuffer && slices.length > 0) {
-            playSlice(0); // Play first slice
+          // If no audio is playing, start playing from beginning of the song
+          if (audioBuffer) {
+            // Play the entire song from the beginning
+            const source = audioContextRef.current.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContextRef.current.destination);
+            source.start();
+            sourceNodesRef.current.push(source);
           }
         }
         return;
@@ -240,8 +245,8 @@ const SamplX = () => {
 
     const data = buffer.getChannelData(0);
     const visibleDuration = buffer.duration / zoomLevel;
-    const startTime = Math.min(zoomOffset, buffer.duration - visibleDuration);
-    const endTime = startTime + visibleDuration;
+    const startTime = Math.max(0, Math.min(zoomOffset, buffer.duration - visibleDuration));
+    const endTime = Math.min(buffer.duration, startTime + visibleDuration);
     
     const startSample = Math.floor(startTime * buffer.sampleRate);
     const endSample = Math.floor(endTime * buffer.sampleRate);
@@ -1396,7 +1401,7 @@ const SamplX = () => {
               const x = (e.clientX - rect.left) * scaleX;
               
               const visibleDuration = audioBuffer.duration / zoomLevel;
-              const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
+              const startTime = Math.max(0, Math.min(zoomOffset, audioBuffer.duration - visibleDuration));
               const clickTime = startTime + (x / canvas.width) * visibleDuration;
               
               // Check if clicking on a slice boundary
@@ -1474,6 +1479,13 @@ const SamplX = () => {
               }
             }}
             onMouseUp={() => {
+              if (draggingSlice !== null && draggingBoundary !== null) {
+                // Save to history when boundary editing is complete
+                const newHistory = history.slice(0, historyIndex + 1);
+                newHistory.push({ slices: [...slices] });
+                setHistory(newHistory);
+                setHistoryIndex(newHistory.length - 1);
+              }
               setDraggingSlice(null);
               setDraggingBoundary(null);
             }}
