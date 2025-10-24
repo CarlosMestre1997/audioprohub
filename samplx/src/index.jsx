@@ -10,6 +10,7 @@ const SamplX = () => {
   const [expandedEQ, setExpandedEQ] = useState({});
   const [draggingSlice, setDraggingSlice] = useState(null);
   const [draggingBoundary, setDraggingBoundary] = useState(null);
+  const [playbackPosition, setPlaybackPosition] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [zoomOffset, setZoomOffset] = useState(0);
   const [pendingSliceStart, setPendingSliceStart] = useState(null);
@@ -157,8 +158,26 @@ const SamplX = () => {
             const source = audioContextRef.current.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(audioContextRef.current.destination);
-            source.start();
-            sourceNodesRef.current.push(source);
+    source.start();
+    sourceNodesRef.current.push(source);
+    
+    // Update playback position during playback
+    const startTime = audioContextRef.current.currentTime;
+    const updatePlaybackPosition = () => {
+      if (sourceNodesRef.current.length > 0) {
+        const currentTime = audioContextRef.current.currentTime;
+        const elapsed = currentTime - startTime;
+        const newPosition = slice.start + elapsed;
+        setPlaybackPosition(newPosition);
+        
+        if (newPosition < slice.end) {
+          requestAnimationFrame(updatePlaybackPosition);
+        } else {
+          setPlaybackPosition(0);
+        }
+      }
+    };
+    requestAnimationFrame(updatePlaybackPosition);
           }
         }
         return;
@@ -328,6 +347,20 @@ const SamplX = () => {
       ctx.setLineDash([]);
       }
     }
+
+    // Draw playback indicator line
+    if (playbackPosition > 0) {
+      const playbackX = ((playbackPosition - startTime) / visibleDuration) * width;
+      if (playbackX >= 0 && playbackX <= width) {
+        ctx.strokeStyle = '#ff4444';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(playbackX, 0);
+        ctx.lineTo(playbackX, height);
+        ctx.stroke();
+      }
+    }
   };
 
   const handleCanvasClick = (e) => {
@@ -339,25 +372,23 @@ const SamplX = () => {
     const x = (e.clientX - rect.left) * scaleX;
     
     const visibleDuration = audioBuffer.duration / zoomLevel;
-    const startTime = Math.min(zoomOffset, audioBuffer.duration - visibleDuration);
+    const startTime = Math.max(0, Math.min(zoomOffset, audioBuffer.duration - visibleDuration));
     const clickTime = startTime + (x / canvas.width) * visibleDuration;
 
     if (pendingSliceStart === null) {
+      // Start a new slice
       setPendingSliceStart(clickTime);
     } else {
-      if (clickTime > pendingSliceStart) {
-        const newSlice = {
-          start: pendingSliceStart,
-          end: clickTime
-        };
-        const newSlices = [...slices, newSlice];
-        const newSettings = { ...sliceSettings };
+      // Complete the slice - automatically handle start/end order
+      const newSlice = {
+        start: Math.min(pendingSliceStart, clickTime),
+        end: Math.max(pendingSliceStart, clickTime)
+      };
+      const newSlices = [...slices, newSlice];
+      const newSettings = { ...sliceSettings };
       setSlices(newSlices);
-        saveToHistory(newSlices, newSettings);
+      saveToHistory(newSlices, newSettings);
       setPendingSliceStart(null);
-      } else {
-        alert('End time must be after start time');
-      }
     }
   };
 
@@ -495,9 +526,28 @@ const SamplX = () => {
     source.start();
     source.onended = () => {
       setActiveSlice(null);
+      setPlaybackPosition(0);
     };
 
     setActiveSlice(idx);
+    
+    // Update playback position during playback
+    const startTime = audioContextRef.current.currentTime;
+    const updatePlaybackPosition = () => {
+      if (sourceNodesRef.current.length > 0) {
+        const currentTime = audioContextRef.current.currentTime;
+        const elapsed = currentTime - startTime;
+        const newPosition = slice.start + elapsed;
+        setPlaybackPosition(newPosition);
+        
+        if (newPosition < slice.end) {
+          requestAnimationFrame(updatePlaybackPosition);
+        } else {
+          setPlaybackPosition(0);
+        }
+      }
+    };
+    requestAnimationFrame(updatePlaybackPosition);
     sourceNodesRef.current.push(source);
     
     // Record this slice event if recording is active (use REF not state!)
@@ -1384,6 +1434,9 @@ const SamplX = () => {
               const zoomFactor = e.deltaY > 0 ? 1.5 : 0.7; // Zoom in more aggressively
               const newZoomLevel = Math.max(0.1, Math.min(50, zoomLevel * zoomFactor));
               
+              // Only update if zoom level actually changed
+              if (newZoomLevel !== zoomLevel) {
+              
               // Focus zoom on cursor position
               const newZoomOffset = cursorTime - (cursorTime - zoomOffset) * (newZoomLevel / zoomLevel);
               
@@ -1391,6 +1444,7 @@ const SamplX = () => {
               setZoomOffset(Math.max(0, Math.min(audioBuffer.duration - audioBuffer.duration / newZoomLevel, newZoomOffset)));
               
               drawWaveform(audioBuffer);
+              }
             }}
             onMouseDown={(e) => {
               if (!audioBuffer) return;
