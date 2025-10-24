@@ -411,22 +411,29 @@ const SamplX = () => {
       const delay = audioContextRef.current.createDelay(0.5);
       const feedback = audioContextRef.current.createGain();
       const wetGain = audioContextRef.current.createGain();
+      const dryGain = audioContextRef.current.createGain();
       
-      delay.delayTime.value = 0.2; // 200ms delay
-      feedback.gain.value = 0.3 * settings.echo; // Feedback amount
-      wetGain.gain.value = 0.5 * settings.echo; // Wet signal level
+      delay.delayTime.value = 0.25; // 250ms delay for more noticeable echo
+      feedback.gain.value = 0.4 * settings.echo; // More feedback
+      wetGain.gain.value = 0.7 * settings.echo; // Louder wet signal
+      dryGain.gain.value = 0.8; // Slightly reduce dry signal
       
       // Create echo feedback loop
       delay.connect(feedback);
       feedback.connect(delay);
       
-      // Connect input to delay and output
+      // Connect input to both dry and delay paths
+      chain.connect(dryGain);
       chain.connect(delay);
       delay.connect(wetGain);
-      chain.connect(gainNode); // Direct signal
-      wetGain.connect(gainNode); // Echo signal
       
-      echoNodesRef.current[idx] = { delay, feedback };
+      // Mix dry and wet signals
+      const merger = audioContextRef.current.createChannelMerger(2);
+      dryGain.connect(merger);
+      wetGain.connect(merger);
+      merger.connect(gainNode);
+      
+      echoNodesRef.current[idx] = { delay, feedback, merger };
     } else {
       chain.connect(gainNode);
       chain = gainNode;
@@ -443,15 +450,14 @@ const SamplX = () => {
       dryGain.gain.value = 1.0; // Always keep dry at 100%
       wetGain.gain.value = settings.reverb * 0.6; // Max 60% wet level
 
+      // Connect dry signal directly to destination
       chain.connect(dryGain);
+      dryGain.connect(audioContextRef.current.destination);
+      
+      // Connect wet signal through reverb to destination
       chain.connect(convolver);
       convolver.connect(wetGain);
-
-      const merger = audioContextRef.current.createChannelMerger(2);
-      dryGain.connect(merger);
-      wetGain.connect(merger);
-      
-      merger.connect(audioContextRef.current.destination);
+      wetGain.connect(audioContextRef.current.destination);
     } else {
       chain.connect(audioContextRef.current.destination);
     }
@@ -744,19 +750,25 @@ const SamplX = () => {
         return;
       }
       
-      // Calculate total duration needed
-      const maxEndTime = Math.max(...recordingEventsRef.current.map(event => event.timestamp + event.duration));
-      const totalDuration = maxEndTime + 1; // Add 1 second padding
+      // Calculate total duration needed - trim silence at beginning
+      const minStartTime = Math.min(...recordingEventsRef.current.map(event => event.timestamp));
+      const maxEndTime = Math.max(...recordingEventsRef.current.map(event => event.timestamp + (event.actualDuration || event.duration)));
+      const totalDuration = maxEndTime - minStartTime; // No padding, trim silence
       
-      console.log('Rendering', recordingEventsRef.current.length, 'events over', totalDuration.toFixed(2), 'seconds');
+      console.log('Rendering', recordingEventsRef.current.length, 'events from', minStartTime.toFixed(2), 'to', maxEndTime.toFixed(2), 'seconds');
+      console.log('Total duration (trimmed):', totalDuration.toFixed(2), 'seconds');
       
       // Create offline audio context for rendering - use original sample rate
       const sampleRate = recordingEventsRef.current[0]?.buffer?.sampleRate || audioContextRef.current.sampleRate;
       const offlineContext = new OfflineAudioContext(2, totalDuration * sampleRate, sampleRate);
       
-      // Render each recorded event
+      // Render each recorded event with adjusted timestamps (remove silence at beginning)
       for (const event of recordingEventsRef.current) {
-        await renderSliceEvent(offlineContext, event);
+        const adjustedEvent = {
+          ...event,
+          timestamp: event.timestamp - minStartTime // Adjust timestamp to remove silence
+        };
+        await renderSliceEvent(offlineContext, adjustedEvent);
       }
       
       console.log('🎵 Rendering audio...');
@@ -811,20 +823,27 @@ const SamplX = () => {
       const delay = offlineContext.createDelay(0.5);
       const feedback = offlineContext.createGain();
       const wetGain = offlineContext.createGain();
+      const dryGain = offlineContext.createGain();
       
-      delay.delayTime.value = 0.2; // 200ms delay
-      feedback.gain.value = 0.3 * event.settings.echo; // Feedback amount
-      wetGain.gain.value = 0.5 * event.settings.echo; // Wet signal level
+      delay.delayTime.value = 0.25; // 250ms delay for more noticeable echo
+      feedback.gain.value = 0.4 * event.settings.echo; // More feedback
+      wetGain.gain.value = 0.7 * event.settings.echo; // Louder wet signal
+      dryGain.gain.value = 0.8; // Slightly reduce dry signal
       
       // Create echo feedback loop
       delay.connect(feedback);
       feedback.connect(delay);
       
-      // Connect input to delay and output
+      // Connect input to both dry and delay paths
+      chain.connect(dryGain);
       chain.connect(delay);
       delay.connect(wetGain);
-      chain.connect(gainNode); // Direct signal
-      wetGain.connect(gainNode); // Echo signal
+      
+      // Mix dry and wet signals
+      const merger = offlineContext.createChannelMerger(2);
+      dryGain.connect(merger);
+      wetGain.connect(merger);
+      merger.connect(gainNode);
     } else {
       chain.connect(gainNode);
       chain = gainNode;
@@ -841,14 +860,14 @@ const SamplX = () => {
       dryGain.gain.value = 1.0; // Always keep dry at 100%
       wetGain.gain.value = event.settings.reverb * 0.6; // Max 60% wet level
       
+      // Connect dry signal directly to destination
       chain.connect(dryGain);
+      dryGain.connect(offlineContext.destination);
+      
+      // Connect wet signal through reverb to destination
       chain.connect(convolver);
       convolver.connect(wetGain);
-      
-      const merger = offlineContext.createChannelMerger(2);
-      dryGain.connect(merger);
-      wetGain.connect(merger);
-      merger.connect(offlineContext.destination);
+      wetGain.connect(offlineContext.destination);
     } else {
       chain.connect(offlineContext.destination);
     }
