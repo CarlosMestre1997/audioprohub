@@ -7,6 +7,7 @@ const SamplX = () => {
   const [activeSlice, setActiveSlice] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [sliceSettings, setSliceSettings] = useState({});
+  const [expandedEQ, setExpandedEQ] = useState({});
   const [zoomLevel, setZoomLevel] = useState(1);
   const [zoomOffset, setZoomOffset] = useState(0);
   const [pendingSliceStart, setPendingSliceStart] = useState(null);
@@ -143,7 +144,34 @@ const SamplX = () => {
       
       if (e.code === 'Space') {
         e.preventDefault();
-        stopAllAudio();
+        
+        // If audio is playing, stop it
+        if (sourceNodesRef.current.length > 0) {
+          stopAllAudio();
+          return;
+        }
+        
+        // If no audio is playing, start selection or play from beginning
+        if (audioBuffer) {
+          if (pendingSliceStart === null) {
+            // Start new slice selection at beginning
+            setPendingSliceStart(0);
+          } else {
+            // Complete the slice selection
+            const endTime = audioBuffer.duration;
+            if (pendingSliceStart < endTime) {
+              const newSlice = { start: pendingSliceStart, end: endTime };
+              setSlices([...slices, newSlice]);
+              setPendingSliceStart(null);
+              
+              // Save to history
+              const newHistory = history.slice(0, historyIndex + 1);
+              newHistory.push({ slices: [...slices, newSlice] });
+              setHistory(newHistory);
+              setHistoryIndex(newHistory.length - 1);
+            }
+          }
+        }
         return;
       }
       
@@ -367,6 +395,19 @@ const SamplX = () => {
         for (let i = 0; i < length; i++) {
           sliceData[i] = sourceData[startOffset + i] || 0;
         }
+        
+        // Add 5ms linear fade in/out
+        const fadeSamples = Math.floor(0.005 * sampleRate); // 5ms in samples
+        
+        // Fade in
+        for (let i = 0; i < fadeSamples && i < length; i++) {
+          sliceData[i] *= i / fadeSamples;
+        }
+        
+        // Fade out
+        for (let i = Math.max(0, length - fadeSamples); i < length; i++) {
+          sliceData[i] *= (length - i) / fadeSamples;
+        }
       }
 
       audioBuffersRef.current[idx] = sliceBuffer;
@@ -413,10 +454,10 @@ const SamplX = () => {
       const wetGain = audioContextRef.current.createGain();
       const dryGain = audioContextRef.current.createGain();
       
-      delay.delayTime.value = 0.25; // 250ms delay for more noticeable echo
-      feedback.gain.value = 0.4 * settings.echo; // More feedback
-      wetGain.gain.value = 0.7 * settings.echo; // Louder wet signal
-      dryGain.gain.value = 0.8; // Slightly reduce dry signal
+      delay.delayTime.value = 0.3; // 300ms delay for more noticeable echo
+      feedback.gain.value = 0.6 * settings.echo; // Much more feedback
+      wetGain.gain.value = 0.9 * settings.echo; // Much louder wet signal
+      dryGain.gain.value = 0.7; // Reduce dry signal more
       
       // Create echo feedback loop
       delay.connect(feedback);
@@ -447,8 +488,8 @@ const SamplX = () => {
       const dryGain = audioContextRef.current.createGain();
       const wetGain = audioContextRef.current.createGain();
 
-      dryGain.gain.value = 1.0; // Always keep dry at 100%
-      wetGain.gain.value = settings.reverb * 0.6; // Max 60% wet level
+      dryGain.gain.value = 0.7; // Reduce dry signal
+      wetGain.gain.value = settings.reverb * 0.8; // Max 80% wet level
 
       // Connect dry signal directly to destination
       chain.connect(dryGain);
@@ -627,6 +668,19 @@ const SamplX = () => {
       const sliceData = sliceBuffer.getChannelData(channel);
       for (let i = 0; i < length; i++) {
         sliceData[i] = sourceData[startOffset + i] || 0;
+      }
+      
+      // Add 5ms linear fade in/out
+      const fadeSamples = Math.floor(0.005 * sampleRate); // 5ms in samples
+      
+      // Fade in
+      for (let i = 0; i < fadeSamples && i < length; i++) {
+        sliceData[i] *= i / fadeSamples;
+      }
+      
+      // Fade out
+      for (let i = Math.max(0, length - fadeSamples); i < length; i++) {
+        sliceData[i] *= (length - i) / fadeSamples;
       }
     }
 
@@ -825,10 +879,10 @@ const SamplX = () => {
       const wetGain = offlineContext.createGain();
       const dryGain = offlineContext.createGain();
       
-      delay.delayTime.value = 0.25; // 250ms delay for more noticeable echo
-      feedback.gain.value = 0.4 * event.settings.echo; // More feedback
-      wetGain.gain.value = 0.7 * event.settings.echo; // Louder wet signal
-      dryGain.gain.value = 0.8; // Slightly reduce dry signal
+      delay.delayTime.value = 0.3; // 300ms delay for more noticeable echo
+      feedback.gain.value = 0.6 * event.settings.echo; // Much more feedback
+      wetGain.gain.value = 0.9 * event.settings.echo; // Much louder wet signal
+      dryGain.gain.value = 0.7; // Reduce dry signal more
       
       // Create echo feedback loop
       delay.connect(feedback);
@@ -857,8 +911,8 @@ const SamplX = () => {
       const dryGain = offlineContext.createGain();
       const wetGain = offlineContext.createGain();
       
-      dryGain.gain.value = 1.0; // Always keep dry at 100%
-      wetGain.gain.value = event.settings.reverb * 0.6; // Max 60% wet level
+      dryGain.gain.value = 0.7; // Reduce dry signal
+      wetGain.gain.value = event.settings.reverb * 0.8; // Max 80% wet level
       
       // Connect dry signal directly to destination
       chain.connect(dryGain);
@@ -1229,6 +1283,30 @@ const SamplX = () => {
           </div>
 
           <div className="bg-zinc-800 rounded-lg p-4 mb-6 border border-blue-700">
+          {/* Timeline Display */}
+          {audioBuffer && (
+            <div className="mb-3 h-6 bg-zinc-900 rounded border border-blue-700 relative overflow-hidden">
+              <div className="absolute inset-0 flex items-center">
+                {Array.from({ length: Math.ceil(audioBuffer.duration / zoomLevel) + 1 }, (_, i) => {
+                  const time = zoomOffset + (i * audioBuffer.duration / zoomLevel) / Math.ceil(audioBuffer.duration / zoomLevel);
+                  const minutes = Math.floor(time / 60);
+                  const seconds = Math.floor(time % 60);
+                  const x = (time - zoomOffset) / (audioBuffer.duration / zoomLevel) * 100;
+                  
+                  return (
+                    <div
+                      key={i}
+                      className="absolute text-xs text-blue-300 font-mono"
+                      style={{ left: `${x}%`, transform: 'translateX(-50%)' }}
+                    >
+                      {minutes}:{seconds.toString().padStart(2, '0')}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          
           <div className="mb-3 flex items-center justify-between">
             <div className="text-sm text-gray-400 flex items-center gap-2">
                 <Scissors size={16} className="text-blue-400" /> 
@@ -1310,6 +1388,27 @@ const SamplX = () => {
               if (hoverTime >= 0 && hoverTime <= audioBuffer.duration) {
                   canvas.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'40\' viewBox=\'0 0 20 40\'><line x1=\'10\' y1=\'0\' x2=\'10\' y2=\'40\' stroke=\'%2300b4d8\' stroke-width=\'2\'/><circle cx=\'10\' cy=\'20\' r=\'3\' fill=\'%2300b4d8\'/></svg>") 10 20, crosshair';
               }
+            }}
+            onWheel={(e) => {
+              if (!audioBuffer || !e.altKey) return;
+              
+              e.preventDefault();
+              
+              const canvas = canvasRef.current;
+              const rect = canvas.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const cursorTime = zoomOffset + (x / rect.width) * (audioBuffer.duration / zoomLevel);
+              
+              const zoomFactor = e.deltaY > 0 ? 1.2 : 0.8;
+              const newZoomLevel = Math.max(0.1, Math.min(50, zoomLevel * zoomFactor));
+              
+              // Focus zoom on cursor position
+              const newZoomOffset = cursorTime - (cursorTime - zoomOffset) * (newZoomLevel / zoomLevel);
+              
+              setZoomLevel(newZoomLevel);
+              setZoomOffset(Math.max(0, Math.min(audioBuffer.duration - audioBuffer.duration / newZoomLevel, newZoomOffset)));
+              
+              drawWaveform(audioBuffer);
             }}
               className="w-full bg-zinc-950 rounded border border-blue-700"
           />
@@ -1458,7 +1557,7 @@ const SamplX = () => {
                   </div>
 
                   <div>
-                    <label className="text-gray-400">Reverb: {((settings.reverb || 0) * 60).toFixed(0)}%</label>
+                    <label className="text-gray-400">Reverb: {((settings.reverb || 0) * 80).toFixed(0)}%</label>
                     <input
                       type="range"
                       min="0"
